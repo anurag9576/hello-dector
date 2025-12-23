@@ -12,6 +12,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import HomeScreen from './PatientHome';
 import CalendarScreen from './Calendar';
 import LabsScreen from './Labs';
+import ProfileScreen from './Profile';
 import { ThemePalette } from '../../../theme/palette';
 
 type TabKey = 'home' | 'calendar' | 'labs' | 'more';
@@ -77,9 +78,14 @@ const moreSections: { title: string; items: MoreItem[] }[] = [
 type MoreTabProps = {
   theme: ThemePalette;
   onLogout: () => void;
+  onProfilePress: () => void;
 };
 
-const MoreTab: React.FC<MoreTabProps> = ({ theme, onLogout }) => {
+const MoreTab: React.FC<MoreTabProps> = ({ theme, onLogout, onProfilePress }) => {
+  const rawMemberId = 'HD-2043';
+  const numericMemberId = rawMemberId.replace(/\D/g, '');
+  const formattedMemberId = numericMemberId.slice(-4).padStart(4, '0');
+
   const handlePress = (item: MoreItem) => {
     if (item.key === 'logout') {
       Alert.alert('Sign out', 'Are you sure you want to log out?', [
@@ -105,15 +111,14 @@ const MoreTab: React.FC<MoreTabProps> = ({ theme, onLogout }) => {
             John Doe
           </Text>
           <Text style={[styles.profileMeta, { color: theme.textSecondary }]}>
-            Premium member • ID #HD-2043
+            Patient id : #{formattedMemberId}
           </Text>
-          <Text style={[styles.profileMeta, { color: theme.textSecondary }]}>
-            Next follow-up: 02 Jan 2026
-          </Text>
+          
         </View>
         <TouchableOpacity
           style={styles.profileChevron}
-          onPress={() => Alert.alert('Profile', 'Edit profile coming soon')}
+          onPress={onProfilePress}
+          activeOpacity={0.7}
         >
           <Icon name="chevron-right" size={22} color={theme.textSecondary} />
         </TouchableOpacity>
@@ -181,30 +186,53 @@ type PatientTabsProps = {
 
 const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
   const [activeTab, setActiveTab] = useState<TabKey>('home');
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   useEffect(() => {
-    if (activeTab === 'home') {
-      return;
-    }
     const handleBack = () => {
-      setActiveTab('home');
-      return true;
+      if (isProfileOpen) {
+        setIsProfileOpen(false);
+        return true;
+      }
+      if (activeTab !== 'home') {
+        setActiveTab('home');
+        return true;
+      }
+      return false;
     };
     const subscription = BackHandler.addEventListener(
       'hardwareBackPress',
       handleBack,
     );
     return () => subscription.remove();
-  }, [activeTab]);
+  }, [activeTab, isProfileOpen]);
+
+  const handleTabPress = (tabKey: TabKey) => {
+    if (isProfileOpen) {
+      setIsProfileOpen(false);
+    }
+    setActiveTab(tabKey);
+  };
 
   const renderContent = () => {
+    if (isProfileOpen) {
+      return (
+        <ProfileScreen theme={theme} onBack={() => setIsProfileOpen(false)} />
+      );
+    }
     switch (activeTab) {
       case 'calendar':
         return <CalendarScreen theme={theme} />;
       case 'labs':
         return <LabsScreen theme={theme} />;
       case 'more':
-        return <MoreTab theme={theme} onLogout={onLogout} />;
+        return (
+          <MoreTab
+            theme={theme}
+            onLogout={onLogout}
+            onProfilePress={() => setIsProfileOpen(true)}
+          />
+        );
       case 'home':
       default:
         return <HomeScreen theme={theme} />;
@@ -226,7 +254,7 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
             <TouchableOpacity
               key={tab.key}
               style={styles.tabButton}
-              onPress={() => setActiveTab(tab.key)}
+              onPress={() => handleTabPress(tab.key)}
               activeOpacity={0.7}
             >
               <Icon

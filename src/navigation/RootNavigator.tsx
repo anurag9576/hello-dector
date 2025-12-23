@@ -134,18 +134,26 @@ const RootNavigator = () => {
     }
   };
 
+  const heroScreens: AppScreen[] = ['login', 'signup', 'forgot', 'otp'];
+  const containerColor = heroScreens.includes(screen)
+    ? theme.hero
+    : theme.background;
+
   return (
     <View
       style={[
         styles.container,
         {
-          backgroundColor: theme.background,
+          backgroundColor: containerColor,
           paddingTop: insets.top,
           paddingBottom: insets.bottom,
         },
       ]}
     >
-      <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
+      <StatusBar
+        barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={containerColor}
+      />
       {renderScreen(theme)}
     </View>
   );
