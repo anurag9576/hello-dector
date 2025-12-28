@@ -14,17 +14,18 @@ import CalendarScreen from './Calendar';
 import LabsScreen from './Labs';
 import ProfileScreen from './Profile';
 import { ThemePalette } from '../../../theme/palette';
+import { patientMeta } from './user_profile_data';
 
-type TabKey = 'home' | 'calendar' | 'labs' | 'more';
+type TabKey = 'home' | 'calendar' | 'labs' | 'profile';
 
 const tabs: { key: TabKey; label: string; icon: string }[] = [
   { key: 'home', label: 'Home', icon: 'home-variant' },
-  { key: 'calendar', label: 'Calendar', icon: 'calendar-month' },
-  { key: 'labs', label: 'Labs', icon: 'flask-outline' },
-  { key: 'more', label: 'More', icon: 'dots-horizontal' },
+  { key: 'calendar', label: 'Exam', icon: 'calendar-month' },
+  { key: 'labs', label: 'Results', icon: 'flask-outline' },
+  { key: 'profile', label: 'Profile', icon: 'account-circle' },
 ];
 
-type MoreItem = {
+type ProfileMenuItem = {
   key: string;
   label: string;
   subtitle: string;
@@ -32,7 +33,7 @@ type MoreItem = {
   accent?: string;
 };
 
-const moreSections: { title: string; items: MoreItem[] }[] = [
+const profileSections: { title: string; items: ProfileMenuItem[] }[] = [
   {
     title: 'Account',
     items: [
@@ -75,18 +76,18 @@ const moreSections: { title: string; items: MoreItem[] }[] = [
   },
 ];
 
-type MoreTabProps = {
+type ProfileTabProps = {
   theme: ThemePalette;
   onLogout: () => void;
   onProfilePress: () => void;
 };
 
-const MoreTab: React.FC<MoreTabProps> = ({ theme, onLogout, onProfilePress }) => {
-  const rawMemberId = 'HD-2043';
-  const numericMemberId = rawMemberId.replace(/\D/g, '');
-  const formattedMemberId = numericMemberId.slice(-4).padStart(4, '0');
-
-  const handlePress = (item: MoreItem) => {
+const ProfileTab: React.FC<ProfileTabProps> = ({
+  theme,
+  onLogout,
+  onProfilePress,
+}) => {
+  const handlePress = (item: ProfileMenuItem) => {
     if (item.key === 'logout') {
       Alert.alert('Sign out', 'Are you sure you want to log out?', [
         { text: 'Cancel', style: 'cancel' },
@@ -99,19 +100,19 @@ const MoreTab: React.FC<MoreTabProps> = ({ theme, onLogout, onProfilePress }) =>
 
   return (
     <ScrollView
-      contentContainerStyle={styles.moreScroll}
+      contentContainerStyle={styles.profileScroll}
       showsVerticalScrollIndicator={false}
     >
       <View style={[styles.profileCard, { backgroundColor: theme.card }]}>
         <View style={[styles.profileAvatar, { backgroundColor: theme.accent }]}>
-          <Text style={styles.profileInitials}>JD</Text>
+          <Text style={styles.profileInitials}>{patientMeta.initials}</Text>
         </View>
         <View style={styles.profileInfo}>
           <Text style={[styles.profileName, { color: theme.textPrimary }]}>
-            John Doe
+            {patientMeta.fullName}
           </Text>
           <Text style={[styles.profileMeta, { color: theme.textSecondary }]}>
-            Patient id : #{formattedMemberId}
+            Patient id : {patientMeta.patientId}
           </Text>
           
         </View>
@@ -124,10 +125,10 @@ const MoreTab: React.FC<MoreTabProps> = ({ theme, onLogout, onProfilePress }) =>
         </TouchableOpacity>
       </View>
 
-      {moreSections.map(section => (
+      {profileSections.map(section => (
         <View
           key={section.title}
-          style={[styles.moreSection, { backgroundColor: theme.card }]}
+          style={[styles.profileSection, { backgroundColor: theme.card }]}
         >
           <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
             {section.title}
@@ -135,13 +136,13 @@ const MoreTab: React.FC<MoreTabProps> = ({ theme, onLogout, onProfilePress }) =>
           {section.items.map(item => (
             <TouchableOpacity
               key={item.key}
-              style={styles.moreRow}
+              style={styles.profileRow}
               onPress={() => handlePress(item)}
               activeOpacity={0.75}
             >
               <View
                 style={[
-                  styles.moreIconWrap,
+                  styles.profileIconWrap,
                   {
                     backgroundColor:
                       item.accent ?? 'rgba(19, 170, 119, 0.12)',
@@ -154,14 +155,14 @@ const MoreTab: React.FC<MoreTabProps> = ({ theme, onLogout, onProfilePress }) =>
                   color={item.accent ?? theme.accent}
                 />
               </View>
-              <View style={styles.moreCopy}>
+              <View style={styles.profileCopy}>
                 <Text
-                  style={[styles.moreTitle, { color: theme.textPrimary }]}
+                  style={[styles.profileTitle, { color: theme.textPrimary }]}
                 >
                   {item.label}
                 </Text>
                 <Text
-                  style={[styles.moreSubtitle, { color: theme.textSecondary }]}
+                  style={[styles.profileSubtitle, { color: theme.textSecondary }]}
                 >
                   {item.subtitle}
                 </Text>
@@ -222,12 +223,12 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
     }
     switch (activeTab) {
       case 'calendar':
-        return <CalendarScreen theme={theme} />;
+        return <CalendarScreen theme={theme} onBack={() => setActiveTab('home')} />;
       case 'labs':
         return <LabsScreen theme={theme} />;
-      case 'more':
+      case 'profile':
         return (
-          <MoreTab
+          <ProfileTab
             theme={theme}
             onLogout={onLogout}
             onProfilePress={() => setIsProfileOpen(true)}
@@ -257,12 +258,30 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
               onPress={() => handleTabPress(tab.key)}
               activeOpacity={0.7}
             >
-              <Icon
-                name={tab.icon}
-                size={20}
-                color={isActive ? theme.accent : theme.textSecondary}
-                style={styles.tabIcon}
-              />
+              {tab.key === 'profile' ? (
+                <View
+                  style={[
+                    styles.profileTabIconCircle,
+                    {
+                      borderColor: isActive ? theme.accent : theme.border,
+                      backgroundColor: isActive ? theme.accent : 'transparent',
+                    },
+                  ]}
+                >
+                  <Icon
+                    name={tab.icon}
+                    size={18}
+                    color={isActive ? theme.card : theme.textSecondary}
+                  />
+                </View>
+              ) : (
+                <Icon
+                  name={tab.icon}
+                  size={20}
+                  color={isActive ? theme.accent : theme.textSecondary}
+                  style={styles.tabIcon}
+                />
+              )}
               <Text
                 style={[
                   styles.tabLabel,
@@ -274,11 +293,6 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
               >
                 {tab.label}
               </Text>
-              {isActive && (
-                <View
-                  style={[styles.tabIndicator, { backgroundColor: theme.accent }]}
-                />
-              )}
             </TouchableOpacity>
           );
         })}
@@ -294,7 +308,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  moreScroll: {
+  profileScroll: {
     padding: 24,
     gap: 18,
   },
@@ -336,7 +350,7 @@ const styles = StyleSheet.create({
   profileChevron: {
     padding: 6,
   },
-  moreSection: {
+  profileSection: {
     borderRadius: 24,
     paddingVertical: 8,
     paddingHorizontal: 4,
@@ -349,7 +363,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     marginBottom: 6,
   },
-  moreRow: {
+  profileRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -358,27 +372,29 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     gap: 12,
   },
-  moreIconWrap: {
+  profileIconWrap: {
     width: 42,
     height: 42,
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  moreCopy: {
+  profileCopy: {
     flex: 1,
     gap: 2,
   },
-  moreTitle: {
+  profileTitle: {
     fontSize: 16,
     fontWeight: '600',
   },
-  moreSubtitle: {
+  profileSubtitle: {
     fontSize: 13,
   },
   tabBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'stretch',
+    gap: 12,
     paddingHorizontal: 20,
     paddingBottom: 8,
     paddingTop: 6,
@@ -387,20 +403,23 @@ const styles = StyleSheet.create({
   tabButton: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 8,
-    gap: 2,
+    justifyContent: 'center',
+    paddingVertical: 10,
+    gap: 4,
   },
   tabIcon: {
     fontSize: 20,
   },
+  profileTabIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+  },
   tabLabel: {
     fontSize: 12,
-  },
-  tabIndicator: {
-    marginTop: 4,
-    height: 4,
-    width: 24,
-    borderRadius: 999,
   },
 });
 

@@ -18,7 +18,6 @@ export type ProfileSection = {
 export type PatientMeta = {
   fullName: string;
   initials: string;
-  tier: string;
   patientId: string;
   memberSince: string;
   city: string;
@@ -31,9 +30,8 @@ export type PatientMeta = {
 };
 
 export const patientMeta: PatientMeta = {
-  fullName: 'Ananya Verma',
-  initials: 'AV',
-  tier: 'Premium Care',
+  fullName: 'Anurag Kumar',
+  initials: 'AK',
   patientId: 'HD-8204',
   memberSince: '12 Mar 2023',
   city: 'Pune',
@@ -42,7 +40,7 @@ export const patientMeta: PatientMeta = {
   email: 'ananya.v@email.com',
   dob: '24 Aug 1992',
   age: 33,
-  gender: 'Female',
+  gender: 'Male',
 };
 
 export const profileSections: ProfileSection[] = [

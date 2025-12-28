@@ -163,13 +163,15 @@ const Profile: React.FC<ProfileProps> = ({ theme, onBack }) => {
               <Text style={[styles.heroName, { color: theme.textPrimary }]}>
                 {patientMeta.fullName}
               </Text>
-              <Text style={[styles.heroTier, { color: theme.textSecondary }]}>
-                {patientMeta.tier}
-              </Text>
-            </View>
-            <View style={[styles.idChip, { backgroundColor: theme.accent }]}>
-              <Icon name="shield-check" size={14} color="#fff" />
-              <Text style={styles.idChipLabel}>{patientMeta.patientId}</Text>
+              <View style={styles.heroIdRow}>
+                <Text style={[styles.heroTier, { color: theme.textSecondary }]}>
+                  Patient ID:
+                </Text>
+                <View style={[styles.idChip, { backgroundColor: theme.accent }]}>
+                  <Icon name="shield-check" size={14} color="#fff" />
+                  <Text style={styles.idChipLabel}>{patientMeta.patientId}</Text>
+                </View>
+              </View>
             </View>
           </View>
           <View style={styles.heroMetaGrid}>
@@ -716,6 +718,11 @@ const styles = StyleSheet.create({
   heroTier: {
     fontSize: 14,
   },
+  heroIdRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   idChip: {
     borderRadius: 999,
     paddingHorizontal: 14,
@@ -723,6 +730,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    alignSelf: 'flex-start',
   },
   idChipLabel: {
     color: '#fff',

@@ -15,6 +15,7 @@ import { doctors } from '../../../data/doctors';
 import { quickActions } from '../data';
 import QuickActions from '../components/QuickActions';
 import DoctorCard from '../components/DoctorCard';
+import { patientMeta } from './user_profile_data';
 
 Icon.loadFont();
 
@@ -194,7 +195,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
               {greetingDescriptor.label}
             </Text>
           </View>
-          <Text style={styles.greetingTitle}>John Doe</Text>
+          <Text style={styles.greetingTitle}>{patientMeta.fullName}</Text>
           <Text
             style={[
               styles.greetingSubtitle,
