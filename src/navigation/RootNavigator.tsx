@@ -4,7 +4,6 @@ import {
   StatusBar,
   StyleSheet,
   View,
-  useColorScheme,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LoginScreen from '../auth/login';
@@ -12,7 +11,8 @@ import SignupScreen from '../auth/singnup';
 import ForgotPasswordScreen from '../auth/forgotpassword';
 import OTPVerificationScreen from '../auth/otpverification';
 import PatientTabs from '../modules/patient/screens/PatientTabs';
-import { darkTheme, lightTheme, ThemePalette } from '../theme/palette';
+import { useThemeContext } from '../theme/ThemeContext';
+import { ThemePalette } from '../theme/palette';
 
 type AppScreen = 'login' | 'signup' | 'forgot' | 'otp' | 'home';
 type OtpPayload = {
@@ -28,8 +28,7 @@ type NavigationState = {
 };
 
 const RootNavigator = () => {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === 'dark' ? darkTheme : lightTheme;
+  const { theme, mode } = useThemeContext();
   const [navState, setNavState] = useState<NavigationState>({
     screen: 'login',
     recoveryPayload: null,
@@ -151,7 +150,7 @@ const RootNavigator = () => {
       ]}
     >
       <StatusBar
-        barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'}
+        barStyle={mode === 'dark' ? 'light-content' : 'dark-content'}
         backgroundColor={containerColor}
       />
       {renderScreen(theme)}

@@ -11,6 +11,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import { ThemePalette } from '../../../theme/palette';
+import { useThemeContext } from '../../../theme/ThemeContext';
 import { doctors } from '../../../data/doctors';
 import { quickActions } from '../data';
 import QuickActions from '../components/QuickActions';
@@ -24,6 +25,7 @@ type PatientHomeProps = {
 };
 
 const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
+  const { mode } = useThemeContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSpecialty, setActiveSpecialty] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
@@ -99,16 +101,16 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
       value: '28°C',
       status: 'Light breeze',
       icon: 'weather-partly-cloudy',
-      iconColor: '#2D7FF9',
-      background: '#EEF4FF',
+      iconColor: theme.accent,
+      background: mode === 'dark' ? theme.softAccent : '#EEF4FF',
     },
     {
       label: 'Air Quality',
       value: 'Good',
       status: 'AQI 42',
       icon: 'leaf',
-      iconColor: '#2ECC71',
-      background: '#ECFDF5',
+      iconColor: theme.success,
+      background: mode === 'dark' ? theme.softAccent : '#ECFDF5',
     },
   ];
 
@@ -118,18 +120,18 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
       value: '72 bpm',
       status: 'Normal',
       icon: 'heart-pulse',
-      iconColor: '#FF6B6B',
-      background: '#FFF4F4',
-      accent: '#FF6B6B',
+      iconColor: theme.danger,
+      background: mode === 'dark' ? theme.softAccent : '#FFF4F4',
+      accent: theme.danger,
     },
     {
       label: 'Blood Pressure',
       value: '120/80',
       status: 'Steady',
       icon: 'pulse',
-      iconColor: '#FF4D67',
-      background: '#F2F6FF',
-      accent: '#2D7FF9',
+      iconColor: theme.accent,
+      background: mode === 'dark' ? theme.softAccent : '#F2F6FF',
+      accent: theme.accent,
     },
   ];
 
@@ -137,36 +139,36 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
     {
       title: 'Cardiology',
       icon: 'heart',
-      iconColor: '#FF4D67',
-      background: '#FFEFF2',
+      iconColor: theme.danger,
+      background: mode === 'dark' ? theme.softAccent : '#FFEFF2',
       query: 'cardio',
     },
     {
       title: 'Neurology',
       icon: 'brain',
-      iconColor: '#7C4DFF',
-      background: '#F5F0FF',
+      iconColor: theme.deepAccent,
+      background: mode === 'dark' ? theme.softAccent : '#F5F0FF',
       query: 'neuro',
     },
     {
       title: 'Pediatrics',
       icon: 'baby-face-outline',
-      iconColor: '#4C8BF5',
-      background: '#F1F7FF',
+      iconColor: theme.accent,
+      background: mode === 'dark' ? theme.softAccent : '#F1F7FF',
       query: 'pediatric',
     },
     {
       title: 'Orthopedic',
       icon: 'bone',
-      iconColor: '#1F8F5F',
-      background: '#F3FEF3',
+      iconColor: theme.success,
+      background: mode === 'dark' ? theme.softAccent : '#F3FEF3',
       query: 'ortho',
     },
     {
       title: 'Dermatology',
       icon: 'flower',
-      iconColor: '#FF80AB',
-      background: '#FFF3F7',
+      iconColor: theme.warning,
+      background: mode === 'dark' ? theme.softAccent : '#FFF3F7',
       query: 'derma',
     },
   ];
@@ -210,7 +212,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
           <Icon
             name="bell-badge-outline"
             size={24}
-            color="#FFFFFF"
+            color={mode === 'dark' ? theme.textPrimary : '#FFFFFF'}
             accessibilityLabel="Notifications"
           />
         </View>
@@ -317,7 +319,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
           <Icon
             name="video-outline"
             size={22}
-            color="#42d05fff"
+            color={theme.success}
             style={styles.videoCallIcon}
           />
           <View
@@ -330,20 +332,19 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
               style={styles.appointmentBadgeIcon}
             />
             <Text style={styles.appointmentBadgeText}>29 DEC</Text>
-           
           </View>
           <View style={styles.appointmentInfo}>
             <Text style={[styles.appointmentDoctor, { color: theme.textPrimary }]}>
               Dr. Aditi Rao
             </Text>
             <Text style={[styles.appointmentDetails, { color: theme.textSecondary }]}>
-              Cardiology · 04:30 PM 
+              Cardiology · 04:30 PM
             </Text>
             <View style={styles.appointmentActions}>
               <TouchableOpacity
                 style={[styles.joinButton, { backgroundColor: theme.accent }]}
               >
-                <Text style={[styles.joinButtonText, { color: '#0F1F1A' }]}>
+                <Text style={[styles.joinButtonText, { color: mode === 'dark' ? theme.textPrimary : '#0F1F1A' }]}>
                   Join
                 </Text>
               </TouchableOpacity>

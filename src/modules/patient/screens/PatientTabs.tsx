@@ -13,6 +13,10 @@ import HomeScreen from './PatientHome';
 import CalendarScreen from './Calendar';
 import LabsScreen from './Labs';
 import ProfileScreen from './Profile';
+import ReportsScreen from './ReportsScreen';
+import HelpCenter from './HelpCenter';
+import Policies from './Policies';
+import SettingsScreen from './SettingsScreen';
 import { ThemePalette } from '../../../theme/palette';
 import { patientMeta } from './user_profile_data';
 
@@ -80,12 +84,20 @@ type ProfileTabProps = {
   theme: ThemePalette;
   onLogout: () => void;
   onProfilePress: () => void;
+  onSettingsPress: () => void;
+  onReportsPress: () => void;
+  onHelpPress: () => void;
+  onPoliciesPress: () => void;
 };
 
 const ProfileTab: React.FC<ProfileTabProps> = ({
   theme,
   onLogout,
   onProfilePress,
+  onSettingsPress,
+  onReportsPress,
+  onHelpPress,
+  onPoliciesPress,
 }) => {
   const handlePress = (item: ProfileMenuItem) => {
     if (item.key === 'logout') {
@@ -93,6 +105,22 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
         { text: 'Cancel', style: 'cancel' },
         { text: 'Sign out', style: 'destructive', onPress: onLogout },
       ]);
+      return;
+    }
+    if (item.key === 'settings') {
+      onSettingsPress();
+      return;
+    }
+    if (item.key === 'reports') {
+      onReportsPress();
+      return;
+    }
+    if (item.key === 'help') {
+      onHelpPress();
+      return;
+    }
+    if (item.key === 'policy') {
+      onPoliciesPress();
       return;
     }
     Alert.alert(item.label, `Opening ${item.label}…`);
@@ -188,9 +216,29 @@ type PatientTabsProps = {
 const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
   const [activeTab, setActiveTab] = useState<TabKey>('home');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isReportsOpen, setIsReportsOpen] = useState(false);
+  const [isHelpCenterOpen, setIsHelpCenterOpen] = useState(false);
+  const [isPoliciesOpen, setIsPoliciesOpen] = useState(false);
 
   useEffect(() => {
     const handleBack = () => {
+      if (isSettingsOpen) {
+        setIsSettingsOpen(false);
+        return true;
+      }
+      if (isReportsOpen) {
+        setIsReportsOpen(false);
+        return true;
+      }
+      if (isHelpCenterOpen) {
+        setIsHelpCenterOpen(false);
+        return true;
+      }
+      if (isPoliciesOpen) {
+        setIsPoliciesOpen(false);
+        return true;
+      }
       if (isProfileOpen) {
         setIsProfileOpen(false);
         return true;
@@ -206,16 +254,39 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
       handleBack,
     );
     return () => subscription.remove();
-  }, [activeTab, isProfileOpen]);
+  }, [activeTab, isProfileOpen, isSettingsOpen, isReportsOpen, isHelpCenterOpen, isPoliciesOpen]);
 
   const handleTabPress = (tabKey: TabKey) => {
-    if (isProfileOpen) {
+    if (isProfileOpen || isSettingsOpen || isReportsOpen || isHelpCenterOpen) {
       setIsProfileOpen(false);
+      setIsSettingsOpen(false);
+      setIsReportsOpen(false);
+      setIsHelpCenterOpen(false);
     }
     setActiveTab(tabKey);
   };
 
   const renderContent = () => {
+    if (isSettingsOpen) {
+      return (
+        <SettingsScreen theme={theme} onBack={() => setIsSettingsOpen(false)} />
+      );
+    }
+    if (isReportsOpen) {
+      return (
+        <ReportsScreen theme={theme} onBack={() => setIsReportsOpen(false)} />
+      );
+    }
+    if (isHelpCenterOpen) {
+      return (
+        <HelpCenter theme={theme} onBack={() => setIsHelpCenterOpen(false)} />
+      );
+    }
+    if (isPoliciesOpen) {
+      return (
+        <Policies theme={theme} onBack={() => setIsPoliciesOpen(false)} />
+      );
+    }
     if (isProfileOpen) {
       return (
         <ProfileScreen theme={theme} onBack={() => setIsProfileOpen(false)} />
@@ -225,13 +296,17 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
       case 'calendar':
         return <CalendarScreen theme={theme} onBack={() => setActiveTab('home')} />;
       case 'labs':
-        return <LabsScreen theme={theme} />;
+        return <LabsScreen theme={theme} onBack={() => setActiveTab('home')} />;
       case 'profile':
         return (
           <ProfileTab
             theme={theme}
             onLogout={onLogout}
             onProfilePress={() => setIsProfileOpen(true)}
+            onSettingsPress={() => setIsSettingsOpen(true)}
+            onReportsPress={() => setIsReportsOpen(true)}
+            onHelpPress={() => setIsHelpCenterOpen(true)}
+            onPoliciesPress={() => setIsPoliciesOpen(true)}
           />
         );
       case 'home':
