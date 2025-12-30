@@ -17,15 +17,17 @@ import ReportsScreen from './ReportsScreen';
 import HelpCenter from './HelpCenter';
 import Policies from './Policies';
 import SettingsScreen from './SettingsScreen';
+import ChatScreen from './Chat';
 import { ThemePalette } from '../../../theme/palette';
 import { patientMeta } from './user_profile_data';
 
-type TabKey = 'home' | 'calendar' | 'labs' | 'profile';
+type TabKey = 'home' | 'calendar' | 'labs' | 'profile' | 'chat';
 
 const tabs: { key: TabKey; label: string; icon: string }[] = [
   { key: 'home', label: 'Home', icon: 'home-variant' },
   { key: 'calendar', label: 'Exam', icon: 'calendar-month' },
   { key: 'labs', label: 'Results', icon: 'flask-outline' },
+  { key: 'chat', label: 'Chat', icon: 'message-text' },
   { key: 'profile', label: 'Profile', icon: 'account-circle' },
 ];
 
@@ -220,6 +222,7 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
   const [isReportsOpen, setIsReportsOpen] = useState(false);
   const [isHelpCenterOpen, setIsHelpCenterOpen] = useState(false);
   const [isPoliciesOpen, setIsPoliciesOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   useEffect(() => {
     const handleBack = () => {
@@ -243,6 +246,10 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
         setIsProfileOpen(false);
         return true;
       }
+      if (isChatOpen) {
+        setIsChatOpen(false);
+        return true;
+      }
       if (activeTab !== 'home') {
         setActiveTab('home');
         return true;
@@ -254,14 +261,16 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
       handleBack,
     );
     return () => subscription.remove();
-  }, [activeTab, isProfileOpen, isSettingsOpen, isReportsOpen, isHelpCenterOpen, isPoliciesOpen]);
+  }, [activeTab, isProfileOpen, isSettingsOpen, isReportsOpen, isHelpCenterOpen, isPoliciesOpen, isChatOpen]);
 
   const handleTabPress = (tabKey: TabKey) => {
-    if (isProfileOpen || isSettingsOpen || isReportsOpen || isHelpCenterOpen) {
+    if (isProfileOpen || isSettingsOpen || isReportsOpen || isHelpCenterOpen || isPoliciesOpen || isChatOpen) {
       setIsProfileOpen(false);
       setIsSettingsOpen(false);
       setIsReportsOpen(false);
       setIsHelpCenterOpen(false);
+      setIsPoliciesOpen(false);
+      setIsChatOpen(false);
     }
     setActiveTab(tabKey);
   };
@@ -289,7 +298,20 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
     }
     if (isProfileOpen) {
       return (
-        <ProfileScreen theme={theme} onBack={() => setIsProfileOpen(false)} />
+        <ProfileTab
+          theme={theme}
+          onLogout={onLogout}
+          onProfilePress={() => setIsProfileOpen(true)}
+          onSettingsPress={() => setIsSettingsOpen(true)}
+          onReportsPress={() => setIsReportsOpen(true)}
+          onHelpPress={() => setIsHelpCenterOpen(true)}
+          onPoliciesPress={() => setIsPoliciesOpen(true)}
+        />
+      );
+    }
+    if (isChatOpen) {
+      return (
+        <ChatScreen theme={theme} onBack={() => setIsChatOpen(false)} />
       );
     }
     switch (activeTab) {
@@ -297,6 +319,8 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
         return <CalendarScreen theme={theme} onBack={() => setActiveTab('home')} />;
       case 'labs':
         return <LabsScreen theme={theme} onBack={() => setActiveTab('home')} />;
+      case 'chat':
+        return <ChatScreen theme={theme} onBack={() => setActiveTab('home')} />;
       case 'profile':
         return (
           <ProfileTab
