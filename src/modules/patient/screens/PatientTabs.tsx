@@ -276,6 +276,11 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
   };
 
   const renderContent = () => {
+    if (isProfileOpen) {
+      return (
+        <ProfileScreen theme={theme} onBack={() => setIsProfileOpen(false)} />
+      );
+    }
     if (isSettingsOpen) {
       return (
         <SettingsScreen theme={theme} onBack={() => setIsSettingsOpen(false)} />
@@ -294,19 +299,6 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
     if (isPoliciesOpen) {
       return (
         <Policies theme={theme} onBack={() => setIsPoliciesOpen(false)} />
-      );
-    }
-    if (isProfileOpen) {
-      return (
-        <ProfileTab
-          theme={theme}
-          onLogout={onLogout}
-          onProfilePress={() => setIsProfileOpen(true)}
-          onSettingsPress={() => setIsSettingsOpen(true)}
-          onReportsPress={() => setIsReportsOpen(true)}
-          onHelpPress={() => setIsHelpCenterOpen(true)}
-          onPoliciesPress={() => setIsPoliciesOpen(true)}
-        />
       );
     }
     if (isChatOpen) {
