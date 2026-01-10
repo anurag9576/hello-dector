@@ -31,6 +31,14 @@ export const sessions = [
   { date: 'Jan 04', time: '06:00 PM', title: 'Cardio consult', doctor: 'Dr. Aditi' },
 ];
 
+export const addSession = (newSession: any) => {
+  sessions.push(newSession);
+};
+
+export const removeSession = (index: number) => {
+  sessions.splice(index, 1);
+};
+
 export const labs = [
   { title: 'Complete Blood Count', status: 'Delivered', date: 'Dec 12' },
   { title: 'Liver Function Test', status: 'In progress', date: 'Dec 16' },

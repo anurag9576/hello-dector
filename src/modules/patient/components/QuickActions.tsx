@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { ThemePalette } from '../../../theme/palette';
 
@@ -13,18 +13,21 @@ export type QuickAction = {
 type QuickActionsProps = {
   theme: ThemePalette;
   actions: QuickAction[];
+  onActionPress?: (actionTitle: string) => void;
 };
 
-const QuickActions: React.FC<QuickActionsProps> = ({ theme, actions }) => {
+const QuickActions: React.FC<QuickActionsProps> = ({ theme, actions, onActionPress }) => {
   return (
     <View style={styles.grid}>
       {actions.map(action => (
-        <View
+        <TouchableOpacity
           key={action.title}
           style={[
             styles.card,
             { backgroundColor: theme.card, borderColor: theme.border },
           ]}
+          onPress={() => onActionPress?.(action.title)}
+          activeOpacity={0.7}
         >
           <Icon
             name={action.icon}
@@ -38,7 +41,7 @@ const QuickActions: React.FC<QuickActionsProps> = ({ theme, actions }) => {
           <Text style={[styles.description, { color: theme.textSecondary }]}>
             {action.description}
           </Text>
-        </View>
+        </TouchableOpacity>
       ))}
     </View>
   );

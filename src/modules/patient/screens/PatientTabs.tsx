@@ -18,10 +18,15 @@ import HelpCenter from './HelpCenter';
 import Policies from './Policies';
 import SettingsScreen from './SettingsScreen';
 import ChatScreen from './Chat';
+import DoctorListScreen from './DoctorListScreen';
 import { ThemePalette } from '../../../theme/palette';
 import { patientMeta } from './user_profile_data';
+import { addSession } from '../data';
+import BookingForm, { BookingFormData } from '../components/BookingForm';
 
 type TabKey = 'home' | 'calendar' | 'labs' | 'profile' | 'chat';
+
+type DoctorListType = 'specialties' | 'top-doctors' | 'all' | null;
 
 const tabs: { key: TabKey; label: string; icon: string }[] = [
   { key: 'home', label: 'Home', icon: 'home-variant' },
@@ -223,6 +228,8 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
   const [isHelpCenterOpen, setIsHelpCenterOpen] = useState(false);
   const [isPoliciesOpen, setIsPoliciesOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isDoctorListOpen, setIsDoctorListOpen] = useState(false);
+  const [doctorListType, setDoctorListType] = useState<DoctorListType>(null);
 
   useEffect(() => {
     const handleBack = () => {
@@ -261,21 +268,87 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
       handleBack,
     );
     return () => subscription.remove();
-  }, [activeTab, isProfileOpen, isSettingsOpen, isReportsOpen, isHelpCenterOpen, isPoliciesOpen, isChatOpen]);
+  }, [activeTab, isProfileOpen, isSettingsOpen, isReportsOpen, isHelpCenterOpen, isPoliciesOpen, isChatOpen, isDoctorListOpen]);
 
   const handleTabPress = (tabKey: TabKey) => {
-    if (isProfileOpen || isSettingsOpen || isReportsOpen || isHelpCenterOpen || isPoliciesOpen || isChatOpen) {
+    if (isProfileOpen || isSettingsOpen || isReportsOpen || isHelpCenterOpen || isPoliciesOpen || isChatOpen || isDoctorListOpen) {
       setIsProfileOpen(false);
       setIsSettingsOpen(false);
       setIsReportsOpen(false);
       setIsHelpCenterOpen(false);
       setIsPoliciesOpen(false);
       setIsChatOpen(false);
+      setIsDoctorListOpen(false);
+      setDoctorListType(null);
     }
     setActiveTab(tabKey);
   };
 
+  const handleSeeAllDoctors = () => {
+    setDoctorListType('top-doctors');
+    setIsDoctorListOpen(true);
+  };
+
+  const handleSeeAllSpecialties = () => {
+    setDoctorListType('specialties');
+    setIsDoctorListOpen(true);
+  };
+
+  const handleSeeAllAppointments = () => {
+    setActiveTab('calendar');
+  };
+
+  const handleBookAppointment = (doctor: any, formData?: BookingFormData) => {
+    // Create new appointment with form data
+    const newAppointment = {
+      date: formData?.preferredDate || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      time: formData?.preferredTime || '10:00 AM',
+      title: `Consultation with ${doctor.name}`,
+      doctor: doctor.name,
+      notes: formData?.reasonForVisit || '',
+      location: formData?.consultationType === 'video' ? 'Video Consultation' : 'HelloDoctor Clinic, Pune',
+      preparation: formData?.consultationType === 'video' 
+        ? ['Check internet connection', 'Test camera/microphone', 'Find quiet space']
+        : ['Bring ID proof', 'Medical records'],
+      consultationType: formData?.consultationType || 'in-person',
+      patientName: formData?.patientName || patientMeta.fullName,
+      patientPhone: formData?.phone || '',
+      symptoms: formData?.symptoms || '',
+      medicalHistory: formData?.medicalHistory || '',
+      emergencyContact: formData?.emergencyContact || '',
+    };
+    
+    // Add to sessions data
+    addSession(newAppointment);
+    
+    // Close doctor list and go to calendar tab (Exam)
+    setIsDoctorListOpen(false);
+    setDoctorListType(null);
+    setActiveTab('calendar');
+    
+    const consultationTypeText = formData?.consultationType === 'video' ? 'video consultation' : 
+                               formData?.consultationType === 'phone' ? 'phone consultation' : 'in-person visit';
+    
+    Alert.alert(
+      'Appointment Booked Successfully!', 
+      `Your ${consultationTypeText} with ${doctor.name} is confirmed for ${newAppointment.date} at ${newAppointment.time}.\n\nCheck the Exam tab for details.`
+    );
+  };
+
   const renderContent = () => {
+    if (isDoctorListOpen) {
+      return (
+        <DoctorListScreen
+          theme={theme}
+          onBack={() => {
+            setIsDoctorListOpen(false);
+            setDoctorListType(null);
+          }}
+          onBookAppointment={handleBookAppointment}
+          type={doctorListType || 'all'}
+        />
+      );
+    }
     if (isProfileOpen) {
       return (
         <ProfileScreen theme={theme} onBack={() => setIsProfileOpen(false)} />
@@ -327,7 +400,15 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
         );
       case 'home':
       default:
-        return <HomeScreen theme={theme} />;
+        return (
+          <HomeScreen 
+            theme={theme} 
+            onSeeAllDoctors={handleSeeAllDoctors}
+            onSeeAllSpecialties={handleSeeAllSpecialties}
+            onSeeAllAppointments={handleSeeAllAppointments}
+            onOpenChat={() => setActiveTab('chat')}
+          />
+        );
     }
   };
 

@@ -11,10 +11,11 @@ import SignupScreen from '../auth/singnup';
 import ForgotPasswordScreen from '../auth/forgotpassword';
 import OTPVerificationScreen from '../auth/otpverification';
 import PatientTabs from '../modules/patient/screens/PatientTabs';
+import DoctorHome from '../modules/doctor/screens/DoctorHome';
 import { useThemeContext } from '../theme/ThemeContext';
 import { ThemePalette } from '../theme/palette';
 
-type AppScreen = 'login' | 'signup' | 'forgot' | 'otp' | 'home';
+type AppScreen = 'login' | 'signup' | 'forgot' | 'otp' | 'home' | 'doctor_home';
 type OtpPayload = {
   contact: string;
   channel: 'email' | 'sms';
@@ -75,13 +76,13 @@ const RootNavigator = () => {
             theme={palette}
             onSignupPress={() => setScreen('signup')}
             onForgotPress={() => setScreen('forgot')}
-            onSuccess={() => setScreen('home')}
+            onSuccess={(role) => setScreen(role === 'doctor' ? 'doctor_home' : 'home')}
             onOtpRequest={payload =>
               setScreen('otp', {
                 contact: payload.contact,
                 channel: payload.channel,
                 backScreen: 'login',
-                successScreen: 'home',
+                successScreen: payload.role === 'doctor' ? 'doctor_home' : 'home',
               })
             }
           />
@@ -127,6 +128,8 @@ const RootNavigator = () => {
             onSuccess={() => setScreen(recoveryPayload?.successScreen ?? 'login')}
           />
         );
+      case 'doctor_home':
+        return <DoctorHome theme={palette} onLogout={() => setScreen('login')} />;
       case 'home':
       default:
         return <PatientTabs theme={palette} onLogout={() => setScreen('login')} />;
