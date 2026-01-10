@@ -20,8 +20,8 @@ type LoginScreenProps = {
   theme: ThemePalette;
   onBack?: () => void;
   onSignupPress?: () => void;
-  onSuccess?: () => void;
-  onOtpRequest?: (payload: { contact: string; channel: 'sms' }) => void;
+  onSuccess?: (role?: 'patient' | 'doctor') => void;
+  onOtpRequest?: (payload: { contact: string; channel: 'sms'; role?: 'doctor' | 'patient' }) => void;
   onForgotPress?: () => void;
 };
 
@@ -65,8 +65,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      onOtpRequest?.({ contact: trimmed, channel: 'sms' });
-      showSnack('Login successful');
+      
+      const role = trimmed === '9576480339' ? 'doctor' : 'patient';
+      onOtpRequest?.({ contact: trimmed, channel: 'sms', role });
+      showSnack('OTP sent successfully');
     }, 1000);
   };
 

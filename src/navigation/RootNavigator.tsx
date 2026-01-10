@@ -11,7 +11,7 @@ import SignupScreen from '../auth/singnup';
 import ForgotPasswordScreen from '../auth/forgotpassword';
 import OTPVerificationScreen from '../auth/otpverification';
 import PatientTabs from '../modules/patient/screens/PatientTabs';
-import DoctorHome from '../modules/doctor/screens/DoctorHome';
+import DoctorTabs from '../modules/doctor/screens/DoctorTabs';
 import { useThemeContext } from '../theme/ThemeContext';
 import { ThemePalette } from '../theme/palette';
 
@@ -129,7 +129,7 @@ const RootNavigator = () => {
           />
         );
       case 'doctor_home':
-        return <DoctorHome theme={palette} onLogout={() => setScreen('login')} />;
+        return <DoctorTabs theme={palette} onLogout={() => setScreen('login')} />;
       case 'home':
       default:
         return <PatientTabs theme={palette} onLogout={() => setScreen('login')} />;
