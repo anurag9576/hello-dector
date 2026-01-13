@@ -10,10 +10,13 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { ThemePalette } from '../theme/palette';
+import { registerUser } from '../utils/api';
 
 
 type Role = 'patient' | 'doctor';
@@ -21,8 +24,8 @@ type Role = 'patient' | 'doctor';
 type SignupScreenProps = {
   theme: ThemePalette;
   onBack?: () => void;
-  onOtpRequest?: (contact: string) => void;
-  onSuccess?: () => void;
+  onOtpRequest?: (payload: { contact: string; role: Role }) => void;
+  onSuccess?: (role: Role) => void;
 };
 
 const SignupScreen: React.FC<SignupScreenProps> = ({
@@ -40,6 +43,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({
   const [password, setPassword] = useState('');
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const isPatient = role === 'patient';
   const isDoctor = role === 'doctor';
@@ -91,7 +95,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({
     }
   };
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     if (!phoneValid) {
       setPhoneError('Enter 10-digit number');
     }
@@ -99,11 +103,32 @@ const SignupScreen: React.FC<SignupScreenProps> = ({
       setEmailError('Enter valid email address');
     }
     if (!isValid) return;
-    const contact = phone.trim();
-    if (contact) {
-      onOtpRequest?.(contact);
-    } else {
-      onSuccess?.();
+
+    setLoading(true);
+    try {
+      const payload = {
+        name,
+        phone,
+        email,
+        password,
+        role,
+        ...(isDoctor ? { department } : { dob, age }),
+      };
+
+      const response = await registerUser(payload);
+      
+      console.log('Registration success:', response);
+      
+      const contact = phone.trim();
+      if (contact) {
+        onOtpRequest?.({ contact, role });
+      } else {
+        onSuccess?.(role);
+      }
+    } catch (error: any) {
+      Alert.alert('Registration Failed', error.message || 'Unable to register. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -248,10 +273,14 @@ const SignupScreen: React.FC<SignupScreenProps> = ({
               styles.primaryButton,
               { opacity: isValid ? 1 : 0.6 },
             ]}
-            disabled={!isValid}
+            disabled={!isValid || loading}
             onPress={handleSignup}
           >
-            <Text style={styles.primaryText}>Continue</Text>
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.primaryText}>Continue</Text>
+            )}
           </TouchableOpacity>
 
           <Text style={styles.footerText}>

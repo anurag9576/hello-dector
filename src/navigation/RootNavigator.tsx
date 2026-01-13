@@ -92,15 +92,15 @@ const RootNavigator = () => {
           <SignupScreen
             theme={palette}
             onBack={() => setScreen('login')}
-            onOtpRequest={contact =>
+            onOtpRequest={payload =>
               setScreen('otp', {
-                contact,
+                contact: payload.contact,
                 channel: 'sms',
                 backScreen: 'signup',
-                successScreen: 'home',
+                successScreen: payload.role === 'doctor' ? 'doctor_home' : 'home',
               })
             }
-            onSuccess={() => setScreen('home')}
+            onSuccess={(role) => setScreen(role === 'doctor' ? 'doctor_home' : 'home')}
           />
         );
       case 'forgot':
