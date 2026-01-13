@@ -121,6 +121,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({
       
       const contact = phone.trim();
       if (contact) {
+        // Use frontend-only flow for OTP
         onOtpRequest?.({ contact, role });
       } else {
         onSuccess?.(role);

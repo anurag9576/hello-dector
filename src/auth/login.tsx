@@ -66,17 +66,27 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
 
     setLoading(true);
     try {
-      const response = await sendOtp({ phone: trimmed });
-      setLoading(false);
+      // Per your Postman test, hitting /login with just the phone number
+      const response = await loginUser({ phone: trimmed });
       
-      // For demo, we still might need role from backend or assume based on phone for now
-      // ideally backend returns the role or we handle it there
-      const role = response.role || (trimmed === '9576480339' ? 'doctor' : 'patient');
+      console.log('Login/Check Success:', response);
+
+      // Extract details from backend response
+      const role = response.role || response.user?.role || 'patient';
+      
+      // Proceed to OTP screen (Mock verify on frontend)
       onOtpRequest?.({ contact: trimmed, channel: 'sms', role });
-      showSnack('OTP sent successfully');
+      showSnack('User verified. Sending code...');
     } catch (error: any) {
+      console.error('Login/Check Error:', error.message);
+      
+      Alert.alert(
+        'Login Failed',
+        error.message || 'This phone number is not registered or cannot log in.',
+        [{ text: 'OK' }]
+      );
+    } finally {
       setLoading(false);
-      Alert.alert('Error', error.message || 'Failed to send OTP. Please try again.');
     }
   };
 
@@ -97,7 +107,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
       });
       setLoading(false);
       showSnack('Login successful');
-      onSuccess?.(response.role);
+      
+      // Look for role in different common response places
+      const role = response.role || response.user?.role || 'patient';
+      onSuccess?.(role);
     } catch (error: any) {
       setLoading(false);
       Alert.alert('Login Failed', error.message || 'Invalid credentials');
