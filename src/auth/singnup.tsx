@@ -339,7 +339,9 @@ const styles = StyleSheet.create({
     borderRadius: 50,
   },
   scrollContainer: {
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 60, // Added more bottom padding for better visibility
   },
   heroSection: {
     alignItems: 'center',
@@ -371,13 +373,16 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 26,
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 32, // More padding inside the card at the bottom
     gap: 20,
     shadowColor: '#000000',
     shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 12,
     elevation: 8,
+    marginBottom: 20, // Space from the bottom of the scroll view
   },
   sectionTitle: {
     fontSize: 20,

@@ -14,7 +14,8 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { ThemePalette } from '../theme/palette';
-import { loginUser, sendOtp } from '../utils/api';
+import { checkUserExistence, loginUser } from '../utils/api';
+import { saveUserSession } from '../utils/storage';
 
 Icon.loadFont();
 
@@ -42,6 +43,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
   const [loading, setLoading] = useState(false);
   const [snackMessage, setSnackMessage] = useState('');
   const [snackVisible, setSnackVisible] = useState(false);
+  const [userFound, setUserFound] = useState(false);
 
   const showSnack = (message: string) => {
     setSnackMessage(message);
@@ -49,7 +51,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
   };
 
   const trimmedContact = contact.trim();
-  const showPasswordField = trimmedContact.includes('@');
+  const isEmail = trimmedContact.includes('@');
+  const showPasswordField = isEmail;
 
   const isValidEmail = (value: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -57,34 +60,52 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
   const isValidPhone = (value: string) =>
     /^\d{10}$/.test(value.replace(/\D/g, ''));
 
-  const handleSendOtp = async () => {
+  const handleNext = async () => {
     const trimmed = contact.trim();
-    const valid = isValidPhone(trimmed);
+    const isEmailInput = isEmail;
+    const isPhoneInput = isValidPhone(trimmed);
 
-    setContactError(valid ? null : 'Enter valid 10-digit phone number');
-    if (!valid) return;
+    if (!isEmailInput && !isPhoneInput) {
+      setContactError('Enter valid email address or 10-digit phone number');
+      return;
+    }
+    setContactError(null);
 
     setLoading(true);
     try {
-      // Per your Postman test, hitting /login with just the phone number
-      const response = await loginUser({ phone: trimmed });
-      
-      console.log('Login/Check Success:', response);
+      // Step 1: Check if user exists in database
+      const response = await checkUserExistence(trimmed);
+      console.log('User Found Response:', response);
 
-      // Extract details from backend response
-      const role = response.role || response.user?.role || 'patient';
-      
-      // Proceed to OTP screen (Mock verify on frontend)
-      onOtpRequest?.({ contact: trimmed, channel: 'sms', role });
-      showSnack('User verified. Sending code...');
+      // Verify if the response actually contains user data
+      // (Backend might return 200 OK with success:false or empty user for unregistered)
+      const role = response.role || response.user?.role || response.data?.user?.role || response.data?.role;
+      const userExists = !!(response.user || response.data?.user || response.role || response.data?.role);
+
+      if (!userExists) {
+        throw new Error('User not registered');
+      }
+
+      if (isEmailInput) {
+        // For email, just unlock the password field
+        setUserFound(true);
+        showSnack('User found. Enter password.');
+      } else {
+        // For phone, proceed to OTP screen
+        onOtpRequest?.({ contact: trimmed, channel: 'sms', role: role || 'patient' });
+        showSnack('User verified. Sending code...');
+      }
     } catch (error: any) {
-      console.error('Login/Check Error:', error.message);
+      console.error('User Check Error:', error.message);
       
-      Alert.alert(
-        'Login Failed',
-        error.message || 'This phone number is not registered or cannot log in.',
-        [{ text: 'OK' }]
-      );
+      const errorMsg = isEmailInput 
+        ? 'Email not registered. Please sign up.' 
+        : 'Phone number not registered.';
+      
+      setContactError(errorMsg);
+      showSnack(errorMsg);
+      
+      // Removed Alert.alert as per user request to show on UI
     } finally {
       setLoading(false);
     }
@@ -92,12 +113,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
 
   const handleEmailLogin = async () => {
     const trimmed = contact.trim();
-    const isEmail = isValidEmail(trimmed);
     const hasPassword = password.trim().length > 0;
 
-    setContactError(isEmail ? null : 'Enter valid email address');
     setPasswordError(hasPassword ? null : 'Password is required');
-    if (!isEmail || !hasPassword) return;
+    if (!hasPassword) return;
 
     setLoading(true);
     try {
@@ -108,8 +127,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
       setLoading(false);
       showSnack('Login successful');
       
-      // Look for role in different common response places
       const role = response.role || response.user?.role || 'patient';
+      
+      // Save session locally
+      await saveUserSession({ ...response, role });
+      
       onSuccess?.(role);
     } catch (error: any) {
       setLoading(false);
@@ -178,18 +200,29 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
               placeholder="Enter phone number or email"
               placeholderTextColor={theme.textSecondary}
               value={contact}
-              onChangeText={setContact}
+              onChangeText={(txt) => {
+                setContact(txt);
+                setUserFound(false); // Reset check if contact changes
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
+              editable={true}
             />
           </View>
 
-          <Text style={{ color: contactError ? theme.hero : theme.textSecondary }}>
-            {contactError ??
-              (showPasswordField
-                ? 'Enter your password to continue'
-                : "We'll send you an OTP to verify")}
-          </Text>
+          <View style={styles.infoRow}>
+            {contactError ? (
+              <Icon name="error-outline" size={16} color={theme.hero} />
+            ) : (
+              <Icon name="info-outline" size={16} color={theme.textSecondary} />
+            )}
+            <Text style={[styles.infoText, { color: contactError ? theme.hero : theme.textSecondary }]}>
+              {contactError ??
+                (showPasswordField
+                  ? 'Enter your password to continue'
+                  : "We'll send you an OTP to verify")}
+            </Text>
+          </View>
 
           {showPasswordField && (
             <View
@@ -226,14 +259,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
 
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: theme.hero }]}
-            onPress={showPasswordField ? handleEmailLogin : handleSendOtp}
+            onPress={isEmail ? handleEmailLogin : handleNext}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.primaryText}>
-                {showPasswordField ? 'Login' : 'Send OTP'}
+                {isEmail ? 'Login' : 'Send OTP'}
               </Text>
             )}
           </TouchableOpacity>
@@ -350,18 +383,30 @@ const styles = StyleSheet.create({
   },
   snackbar: {
     position: 'absolute',
-    bottom: 24,
+    top: 24,
     left: 16,
     right: 16,
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    backgroundColor: 'rgba(239, 68, 68, 0.95)', // Reddish for error visibility
     paddingVertical: 14,
     paddingHorizontal: 18,
     borderRadius: 14,
     alignItems: 'center',
+    zIndex: 1000,
+    elevation: 20,
   },
   snackbarText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  infoText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
 });
 

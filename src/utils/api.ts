@@ -52,5 +52,15 @@ export const apiCall = async (endpoint: string, method: 'GET' | 'POST' | 'PUT' |
 // Auth Services
 export const registerUser = (userData: any) => apiCall('/register', 'POST', userData);
 export const loginUser = (credentials: any) => apiCall('/login', 'POST', credentials);
+
+/**
+ * Checks if a user exists in the database.
+ * Hits /login with only the identifier (phone or email).
+ */
+export const checkUserExistence = (identifier: string) => {
+  const isEmail = identifier.includes('@');
+  return apiCall('/login', 'POST', isEmail ? { email: identifier.trim() } : { phone: identifier.trim() });
+};
+
 export const sendOtp = (payload: { phone?: string; email?: string }) => apiCall('/send-otp', 'POST', payload);
 export const verifyOtp = (payload: { phone?: string; email?: string; otp: string }) => apiCall('/verify-otp', 'POST', payload);
