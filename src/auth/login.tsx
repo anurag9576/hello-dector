@@ -10,9 +10,11 @@ import {
   TouchableOpacity,
   View,
   ScrollView,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { ThemePalette } from '../theme/palette';
+import { loginUser, sendOtp } from '../utils/api';
 
 Icon.loadFont();
 
@@ -55,7 +57,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
   const isValidPhone = (value: string) =>
     /^\d{10}$/.test(value.replace(/\D/g, ''));
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     const trimmed = contact.trim();
     const valid = isValidPhone(trimmed);
 
@@ -63,16 +65,22 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     if (!valid) return;
 
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const response = await sendOtp({ phone: trimmed });
       setLoading(false);
       
-      const role = trimmed === '9576480339' ? 'doctor' : 'patient';
+      // For demo, we still might need role from backend or assume based on phone for now
+      // ideally backend returns the role or we handle it there
+      const role = response.role || (trimmed === '9576480339' ? 'doctor' : 'patient');
       onOtpRequest?.({ contact: trimmed, channel: 'sms', role });
       showSnack('OTP sent successfully');
-    }, 1000);
+    } catch (error: any) {
+      setLoading(false);
+      Alert.alert('Error', error.message || 'Failed to send OTP. Please try again.');
+    }
   };
 
-  const handleEmailLogin = () => {
+  const handleEmailLogin = async () => {
     const trimmed = contact.trim();
     const isEmail = isValidEmail(trimmed);
     const hasPassword = password.trim().length > 0;
@@ -82,11 +90,18 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     if (!isEmail || !hasPassword) return;
 
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const response = await loginUser({
+        email: trimmed,
+        password: password.trim(),
+      });
       setLoading(false);
       showSnack('Login successful');
-      onSuccess?.();
-    }, 1000);
+      onSuccess?.(response.role);
+    } catch (error: any) {
+      setLoading(false);
+      Alert.alert('Login Failed', error.message || 'Invalid credentials');
+    }
   };
 
   useEffect(() => {
