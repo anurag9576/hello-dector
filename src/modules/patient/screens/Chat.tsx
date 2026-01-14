@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { ThemePalette } from '../../../theme/palette';
-import { patientMeta } from './user_profile_data';
+import { usePatientProfile } from '../hooks/usePatientProfile';
 
 type Doctor = {
   id: string;
@@ -40,6 +40,7 @@ type ChatProps = {
 };
 
 const Chat: React.FC<ChatProps> = ({ theme, onBack }) => {
+  const { patientMeta } = usePatientProfile();
   const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
   
   const doctors: Doctor[] = [

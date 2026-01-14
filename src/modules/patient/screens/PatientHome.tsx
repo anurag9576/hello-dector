@@ -17,7 +17,7 @@ import { quickActions } from '../data';
 import QuickActions from '../components/QuickActions';
 import DoctorCard from '../components/DoctorCard';
 import BookingForm, { BookingFormData } from '../components/BookingForm';
-import { patientMeta } from './user_profile_data';
+import { usePatientProfile } from '../hooks/usePatientProfile';
 
 Icon.loadFont();
 
@@ -31,6 +31,7 @@ type PatientHomeProps = {
 
 const PatientHome: React.FC<PatientHomeProps> = ({ theme, onSeeAllDoctors, onSeeAllSpecialties, onSeeAllAppointments, onOpenChat }) => {
   const { mode } = useThemeContext();
+  const { patientMeta } = usePatientProfile();
   const topDoctorsRef = useRef<View>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const [searchQuery, setSearchQuery] = useState('');

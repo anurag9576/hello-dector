@@ -24,7 +24,7 @@ type LoginScreenProps = {
   onBack?: () => void;
   onSignupPress?: () => void;
   onSuccess?: (role?: 'patient' | 'doctor') => void;
-  onOtpRequest?: (payload: { contact: string; channel: 'sms'; role?: 'doctor' | 'patient' }) => void;
+  onOtpRequest?: (payload: { contact: string; channel: 'sms'; role?: 'doctor' | 'patient'; userId?: string }) => void;
   onForgotPress?: () => void;
 };
 
@@ -80,6 +80,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
       // Verify if the response actually contains user data
       // (Backend might return 200 OK with success:false or empty user for unregistered)
       const role = response.role || response.user?.role || response.data?.user?.role || response.data?.role;
+      const userId = response.id || response.user?.id || response.data?.user?.id || response._id || response.user?._id;
       const userExists = !!(response.user || response.data?.user || response.role || response.data?.role);
 
       if (!userExists) {
@@ -92,7 +93,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
         showSnack('User found. Enter password.');
       } else {
         // For phone, proceed to OTP screen
-        onOtpRequest?.({ contact: trimmed, channel: 'sms', role: role || 'patient' });
+        onOtpRequest?.({ 
+          contact: trimmed, 
+          channel: 'sms', 
+          role: role || 'patient',
+          userId: userId // Path the userId forward
+        });
         showSnack('User verified. Sending code...');
       }
     } catch (error: any) {

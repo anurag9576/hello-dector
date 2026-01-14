@@ -23,6 +23,7 @@ type OtpPayload = {
   channel: 'email' | 'sms';
   backScreen: AppScreen;
   successScreen: AppScreen;
+  userId?: string;
 };
 type RecoveryPayload = OtpPayload | null;
 type NavigationState = {
@@ -110,6 +111,7 @@ const RootNavigator = () => {
                 channel: payload.channel,
                 backScreen: 'login',
                 successScreen: payload.role === 'doctor' ? 'doctor_home' : 'home',
+                userId: payload.userId,
               })
             }
           />
@@ -125,9 +127,10 @@ const RootNavigator = () => {
                 channel: 'sms',
                 backScreen: 'signup',
                 successScreen: payload.role === 'doctor' ? 'doctor_home' : 'home',
+                userId: payload.userId,
               })
             }
-            onSuccess={(role) => setScreen(role === 'doctor' ? 'doctor_home' : 'home')}
+            onSuccess={() => setScreen('login')}
           />
         );
       case 'forgot':
@@ -153,9 +156,18 @@ const RootNavigator = () => {
             defaultChannel={recoveryPayload?.channel}
             onBack={() => setScreen(recoveryPayload?.backScreen ?? 'login')}
             onSuccess={async () => {
-              const role = recoveryPayload?.successScreen === 'doctor_home' ? 'doctor' : 'patient';
-              await saveUserSession({ contact: recoveryPayload?.contact, role });
-              setScreen(recoveryPayload?.successScreen ?? 'login');
+              if (recoveryPayload?.successScreen === 'login') {
+                // If going to login screen, don't auto-login yet
+                setScreen('login');
+              } else {
+                const role = recoveryPayload?.successScreen === 'doctor_home' ? 'doctor' : 'patient';
+                await saveUserSession({
+                  contact: recoveryPayload?.contact,
+                  role,
+                  id: recoveryPayload?.userId
+                });
+                setScreen(recoveryPayload?.successScreen ?? 'login');
+              }
             }}
           />
         );

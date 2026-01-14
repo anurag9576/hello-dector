@@ -20,7 +20,7 @@ import SettingsScreen from './SettingsScreen';
 import ChatScreen from './Chat';
 import DoctorListScreen from './DoctorListScreen';
 import { ThemePalette } from '../../../theme/palette';
-import { patientMeta } from './user_profile_data';
+import { usePatientProfile } from '../hooks/usePatientProfile';
 import { addSession } from '../data';
 import BookingForm, { BookingFormData } from '../components/BookingForm';
 
@@ -106,6 +106,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   onHelpPress,
   onPoliciesPress,
 }) => {
+  const { patientMeta } = usePatientProfile();
   const handlePress = (item: ProfileMenuItem) => {
     if (item.key === 'logout') {
       Alert.alert('Sign out', 'Are you sure you want to log out?', [
@@ -221,6 +222,7 @@ type PatientTabsProps = {
 };
 
 const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
+  const { patientMeta } = usePatientProfile();
   const [activeTab, setActiveTab] = useState<TabKey>('home');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);

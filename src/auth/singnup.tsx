@@ -24,7 +24,7 @@ type Role = 'patient' | 'doctor';
 type SignupScreenProps = {
   theme: ThemePalette;
   onBack?: () => void;
-  onOtpRequest?: (payload: { contact: string; role: Role }) => void;
+  onOtpRequest?: (payload: { contact: string; role: Role; userId?: string }) => void;
   onSuccess?: (role: Role) => void;
 };
 
@@ -120,9 +120,10 @@ const SignupScreen: React.FC<SignupScreenProps> = ({
       console.log('Registration success:', response);
       
       const contact = phone.trim();
+      const userId = response.id || response.user?.id || response._id || response.user?._id || response.user?._id;
       if (contact) {
         // Use frontend-only flow for OTP
-        onOtpRequest?.({ contact, role });
+        onOtpRequest?.({ contact, role, userId });
       } else {
         onSuccess?.(role);
       }

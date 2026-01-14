@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 
+import { getUserSession } from './storage';
+
 // Use 10.0.2.2 for Android Emulator to access host machine's localhost
 // Use localhost for iOS Simulator
 // For physical devices, you must use your machine's IP address (e.g., 192.168.x.x)
@@ -21,6 +23,9 @@ const apiClient = axios.create({
 
 export const apiCall = async (endpoint: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', body?: any) => {
   try {
+    const session = await getUserSession();
+    const token = session?.token || session?.data?.token;
+
     console.log(`Making ${method} request to: ${BASE_URL}${endpoint}`);
     if (body) console.log('Request Body:', JSON.stringify(body, null, 2));
 
@@ -28,6 +33,7 @@ export const apiCall = async (endpoint: string, method: 'GET' | 'POST' | 'PUT' |
       url: endpoint,
       method,
       data: body,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     
     console.log(`Response from ${endpoint}:`, response.data);
@@ -64,3 +70,9 @@ export const checkUserExistence = (identifier: string) => {
 
 export const sendOtp = (payload: { phone?: string; email?: string }) => apiCall('/send-otp', 'POST', payload);
 export const verifyOtp = (payload: { phone?: string; email?: string; otp: string }) => apiCall('/verify-otp', 'POST', payload);
+
+// Patient Profile Services
+export const getPatientProfile = () => apiCall('/get-profile', 'GET');
+export const savePatientProfile = (profileData: any) => apiCall('/save-profile', 'POST', profileData);
+export const updatePatientProfile = (profileData: any) => apiCall('/update-profile', 'POST', profileData);
+

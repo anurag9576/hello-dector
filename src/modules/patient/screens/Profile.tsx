@@ -1,4 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import axios from 'axios';
+import { apiCall } from '../../../utils/api';
 import {
   ScrollView,
   StyleSheet,
@@ -15,12 +17,111 @@ import DateTimePicker, {
   DateTimePickerAndroid,
 } from '@react-native-community/datetimepicker';
 import { ThemePalette } from '../../../theme/palette';
-import {
-  patientMeta,
-  profileSections,
-  ProfileSection,
-  ProfileListItem,
-} from './user_profile_data';
+import { usePatientProfile, PatientMeta } from '../hooks/usePatientProfile';
+import { getUserSession } from '../../../utils/storage';
+import { updatePatientProfile } from '../../../utils/api';
+
+export type ProfileListItem = {
+  label: string;
+  value: string;
+  helper?: string;
+  chip?: string;
+};
+
+export type ProfileSection = {
+  key: string;
+  title: string;
+  icon: string;
+  accent: string;
+  items: ProfileListItem[];
+  allowsSectionEdit?: boolean;
+  sectionIcon?: string;
+};
+
+// Default empty sections structure
+// Default sections structure with labels
+const initialSections: ProfileSection[] = [
+  {
+    key: 'basic',
+    title: 'Basic Information',
+    icon: 'account-badge',
+    accent: '#1B998B',
+    allowsSectionEdit: true,
+    items: [
+      { label: 'Full Name', value: '' },
+      { label: 'Gender', value: '' },
+      { label: 'Date of Birth', value: '' },
+      { label: 'Mobile', value: '' },
+      { label: 'Email', value: '' },
+      { label: 'Address', value: '' },
+    ],
+  },
+  {
+    key: 'emergency',
+    title: 'Emergency Contact',
+    icon: 'phone-alert',
+    accent: '#D97706',
+    allowsSectionEdit: true,
+    items: [
+      { label: 'Name', value: '' },
+      { label: 'Relationship', value: '' },
+      { label: 'Contact Number', value: '' },
+    ],
+  },
+  {
+    key: 'medical',
+    title: 'Medical Information',
+    icon: 'heart-pulse',
+    accent: '#EF476F',
+    allowsSectionEdit: true,
+    items: [
+      { label: 'Blood Group', value: '' },
+      { label: 'Height', value: '' },
+      { label: 'Weight', value: '' },
+      { label: 'Existing Conditions', value: '' },
+      { label: 'Allergies', value: '' },
+      { label: 'Past Surgeries', value: '' },
+    ],
+  },
+  {
+    key: 'current',
+    title: 'Current Health Details',
+    icon: 'clipboard-pulse-outline',
+    accent: '#6366F1',
+    allowsSectionEdit: true,
+    items: [
+      { label: 'Symptoms', value: '' },
+      { label: 'Medications', value: '' },
+      { label: 'Doctor', value: '' },
+    ],
+  },
+  {
+    key: 'lifestyle',
+    title: 'Lifestyle',
+    icon: 'leaf',
+    accent: '#0EA5E9',
+    allowsSectionEdit: true,
+    items: [
+      { label: 'Smoking', value: '' },
+      { label: 'Alcohol', value: '' },
+      { label: 'Exercise', value: '' },
+      { label: 'Diet', value: '' },
+    ],
+  },
+  {
+    key: 'insurance',
+    title: 'Insurance & Hospital',
+    icon: 'shield-check',
+    accent: '#16A34A',
+    allowsSectionEdit: true,
+    items: [
+      { label: 'Health Insurance', value: '' },
+      { label: 'Provider', value: '' },
+      { label: 'Policy Number', value: '' },
+      { label: 'Preferred Hospital', value: '' },
+    ],
+  },
+];
 
 type ProfileProps = {
   theme: ThemePalette;
@@ -29,7 +130,89 @@ type ProfileProps = {
 
 const Profile: React.FC<ProfileProps> = ({ theme, onBack }) => {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [sectionsData, setSectionsData] = useState(profileSections);
+  const { patientMeta, fullProfile, loading: profileLoading } = usePatientProfile();
+  const [sectionsData, setSectionsData] = useState<ProfileSection[]>(initialSections);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!profileLoading && patientMeta) {
+      // Re-generate segments based on fetched meta and full profile
+      const updatedSections = initialSections.map(section => {
+        if (section.key === 'basic') {
+          return {
+            ...section,
+            items: [
+              { label: 'Full Name', value: patientMeta.fullName },
+              { label: 'Gender', value: patientMeta.gender },
+              { label: 'Date of Birth', value: patientMeta.dob, helper: patientMeta.age ? `Age ${patientMeta.age}` : '' },
+              { label: 'Mobile', value: patientMeta.contact },
+              { label: 'Email', value: patientMeta.email },
+              { label: 'Address', value: fullProfile?.basicInfo?.address || (patientMeta.city ? `${patientMeta.city}, ${patientMeta.state}` : '') },
+            ],
+          };
+        }
+        if (section.key === 'emergency' && fullProfile?.emergencyContact) {
+          return {
+            ...section,
+            items: [
+              { label: 'Name', value: fullProfile.emergencyContact.name || '' },
+              { label: 'Relationship', value: fullProfile.emergencyContact.relationship || '' },
+              { label: 'Contact Number', value: fullProfile.emergencyContact.phone || '' },
+            ],
+          };
+        }
+        if (section.key === 'medical' && fullProfile?.medicalInfo) {
+          return {
+            ...section,
+            items: [
+              { label: 'Blood Group', value: fullProfile.medicalInfo.bloodGroup || '' },
+              { label: 'Height', value: fullProfile.medicalInfo.height || '' },
+              { label: 'Weight', value: fullProfile.medicalInfo.weight || '' },
+              { label: 'Existing Conditions', value: fullProfile.medicalInfo.existingConditions || '' },
+              { label: 'Allergies', value: fullProfile.medicalInfo.allergies || '' },
+              { label: 'Past Surgeries', value: fullProfile.medicalInfo.pastSurgeries || '' },
+            ],
+          };
+        }
+        if (section.key === 'current' && fullProfile?.currentHealth) {
+          return {
+            ...section,
+            items: [
+              { label: 'Symptoms', value: fullProfile.currentHealth.symptoms || '' },
+              { label: 'Medications', value: fullProfile.currentHealth.medications || '' },
+              { label: 'Doctor', value: fullProfile.currentHealth.assignedDoctor || '' },
+            ],
+          };
+        }
+        if (section.key === 'lifestyle' && fullProfile?.lifestyle) {
+          return {
+            ...section,
+            items: [
+              { label: 'Smoking', value: fullProfile.lifestyle.smoking || '' },
+              { label: 'Alcohol', value: fullProfile.lifestyle.alcohol || '' },
+              { label: 'Exercise', value: fullProfile.lifestyle.exercise || '' },
+              { label: 'Diet', value: fullProfile.lifestyle.diet || '' },
+            ],
+          };
+        }
+        if (section.key === 'insurance' && fullProfile?.insurance) {
+          return {
+            ...section,
+            items: [
+              { label: 'Health Insurance', value: fullProfile.insurance.hasInsurance ? 'Yes' : 'No' },
+              { label: 'Provider', value: fullProfile.insurance.provider || '' },
+              { label: 'Policy Number', value: fullProfile.insurance.policyNumber || '' },
+              { label: 'Preferred Hospital', value: fullProfile.insurance.preferredHospital || '' },
+            ],
+          };
+        }
+        return section;
+      });
+      setSectionsData(updatedSections);
+      setLoading(false);
+    }
+  }, [profileLoading, patientMeta, fullProfile]);
+
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [editingSectionKey, setEditingSectionKey] = useState<string | null>(null);
@@ -50,24 +233,71 @@ const Profile: React.FC<ProfileProps> = ({ theme, onBack }) => {
     setEditingValue('');
   };
 
-  const handleEditSave = () => {
+  const handleEditSave = async () => {
     if (!editingKey) {
       return;
     }
     const [sectionKey, label] = editingKey.split('::');
-    setSectionsData(prev =>
-      prev.map(section =>
-        section.key === sectionKey
-          ? {
-              ...section,
-              items: section.items.map(item =>
-                item.label === label ? { ...item, value: editingValue } : item,
-              ),
-            }
-          : section,
-      ),
-    );
-    handleEditCancel();
+
+    // Construct backend payload based on field
+    let payload: any = {};
+    if (sectionKey === 'basic') {
+      const fieldMap: Record<string, string> = {
+        'Full Name': 'fullName',
+        'Gender': 'gender',
+        'Date of Birth': 'dob',
+        'Mobile': 'phone',
+        'Email': 'email',
+        'Address': 'address',
+      };
+      const dbField = fieldMap[label];
+      if (dbField) {
+        payload.basicInfo = { [dbField]: editingValue };
+      }
+    } else if (sectionKey === 'emergency') {
+      const fieldMap: Record<string, string> = {
+        'Name': 'name',
+        'Relationship': 'relationship',
+        'Contact Number': 'phone',
+      };
+      payload.emergencyContact = { [fieldMap[label]]: editingValue };
+    } else if (sectionKey === 'medical') {
+      const fieldMap: Record<string, string> = {
+        'Blood Group': 'bloodGroup',
+        'Height': 'height',
+        'Weight': 'weight',
+        'Existing Conditions': 'existingConditions',
+        'Allergies': 'allergies',
+        'Past Surgeries': 'pastSurgeries',
+      };
+      payload.medicalInfo = { [fieldMap[label]]: editingValue };
+    }
+
+    try {
+      setLoading(true);
+      const session = await getUserSession();
+      const userId = session?.user?.id || session?.id || session?.userId;
+      
+      await updatePatientProfile({ userId, ...payload });
+
+      setSectionsData(prev =>
+        prev.map(section =>
+          section.key === sectionKey
+            ? {
+                ...section,
+                items: section.items.map(item =>
+                  item.label === label ? { ...item, value: editingValue } : item,
+                ),
+              }
+            : section,
+        ),
+      );
+      handleEditCancel();
+    } catch (err: any) {
+      console.error('Failed to save field:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const startSectionEdit = (section: ProfileSection) => {
@@ -85,27 +315,94 @@ const Profile: React.FC<ProfileProps> = ({ theme, onBack }) => {
     setEditingSectionKey(null);
   };
 
-  const saveSectionEdit = () => {
+  const saveSectionEdit = async () => {
     if (!editingSectionKey) {
       return;
     }
-    setSectionsData(prev =>
-      prev.map(section =>
-        section.key === editingSectionKey
-          ? {
-              ...section,
-              items: section.items.map(item => {
-                const rowKey = `${section.key}::${item.label}`;
-                return {
-                  ...item,
-                  value: sectionDrafts[rowKey] ?? item.value,
-                };
-              }),
-            }
-          : section,
-      ),
-    );
-    cancelSectionEdit();
+
+    const updatedItems = sectionsData
+      .find(s => s.key === editingSectionKey)
+      ?.items.map(item => {
+        const rowKey = `${editingSectionKey}::${item.label}`;
+        return {
+          ...item,
+          value: sectionDrafts[rowKey] ?? item.value,
+        };
+      }) || [];
+
+    const updatedValues: Record<string, string> = {};
+    updatedItems.forEach(it => {
+      updatedValues[it.label] = it.value;
+    });
+
+    let payload: any = {};
+    if (editingSectionKey === 'basic') {
+      payload.basicInfo = {
+        fullName: updatedValues['Full Name'],
+        gender: updatedValues['Gender'],
+        dob: updatedValues['Date of Birth'],
+        phone: updatedValues['Mobile'],
+        email: updatedValues['Email'],
+        address: updatedValues['Address'],
+      };
+    } else if (editingSectionKey === 'emergency') {
+      payload.emergencyContact = {
+        name: updatedValues['Name'],
+        relationship: updatedValues['Relationship'],
+        phone: updatedValues['Contact Number'],
+      };
+    } else if (editingSectionKey === 'medical') {
+      payload.medicalInfo = {
+        bloodGroup: updatedValues['Blood Group'],
+        height: updatedValues['Height'],
+        weight: updatedValues['Weight'],
+        existingConditions: updatedValues['Existing Conditions'],
+        allergies: updatedValues['Allergies'],
+        pastSurgeries: updatedValues['Past Surgeries'],
+      };
+    } else if (editingSectionKey === 'current') {
+      payload.currentHealth = {
+        symptoms: updatedValues['Symptoms'],
+        medications: updatedValues['Medications'],
+        assignedDoctor: updatedValues['Doctor'],
+      };
+    } else if (editingSectionKey === 'lifestyle') {
+      payload.lifestyle = {
+        smoking: updatedValues['Smoking'],
+        alcohol: updatedValues['Alcohol'],
+        exercise: updatedValues['Exercise'],
+        diet: updatedValues['Diet'],
+      };
+    } else if (editingSectionKey === 'insurance') {
+      payload.insurance = {
+        hasInsurance: updatedValues['Health Insurance'] === 'Yes',
+        provider: updatedValues['Provider'],
+        policyNumber: updatedValues['Policy Number'],
+        preferredHospital: updatedValues['Preferred Hospital'],
+      };
+    }
+
+    try {
+      setLoading(true);
+      const session = await getUserSession();
+      const userId = session?.user?.id || session?.id || session?.userId;
+      
+      await updatePatientProfile({ userId, ...payload });
+
+      setSectionsData(prev =>
+        prev.map(section =>
+          section.key === editingSectionKey
+            ? { ...section, items: updatedItems }
+            : section,
+        ),
+      );
+      cancelSectionEdit();
+    } catch (err: any) {
+      console.error('Failed to save section:', err);
+      // Removed Alert import to avoid more lint errors, using console and local error handle
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDraftChange = (rowKey: string, value: string) =>
@@ -113,6 +410,14 @@ const Profile: React.FC<ProfileProps> = ({ theme, onBack }) => {
       ...prev,
       [rowKey]: value,
     }));
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingCenter, { backgroundColor: theme.background }]}>
+        <Text style={{ color: theme.textSecondary }}>Loading Profile...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -639,6 +944,10 @@ const ProfileRow: React.FC<RowProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingCenter: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   navBar: {
     flexDirection: 'row',
