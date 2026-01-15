@@ -486,13 +486,15 @@ const Profile: React.FC<ProfileProps> = ({ theme, onBack }) => {
               { icon: 'calendar-star', label: 'Member since', value: patientMeta.memberSince },
               { icon: 'account', label: 'Gender', value: patientMeta.gender },
               { icon: 'cake-variant', label: 'Age', value: `${patientMeta.age} yrs` },
-              { icon: 'map-marker', label: 'City', value: `${patientMeta.city}, ${patientMeta.state}` },
+              { icon: 'map-marker', label: 'City', value: (fullProfile?.basicInfo?.address?.trim().split(/[\s,]+/)[0]) || patientMeta.city || 'N/A' },
             ].map(item => (
               <View key={item.label} style={styles.metaCell}>
-                <Icon name={item.icon} size={18} color={theme.textSecondary} />
-                <Text style={[styles.metaLabel, { color: theme.textSecondary }]}>
-                  {item.label}
-                </Text>
+                <View style={styles.metaHeader}>
+                  <Icon name={item.icon} size={14} color={theme.textSecondary} />
+                  <Text style={[styles.metaLabel, { color: theme.textSecondary }]}>
+                    {item.label}
+                  </Text>
+                </View>
                 <Text style={[styles.metaValue, { color: theme.textPrimary }]}>
                   {item.value}
                 </Text>
@@ -655,7 +657,14 @@ const inlineLockedFields = new Set([
   'Mobile',
   'Email',
   'Address',
+  'City',
+  'State',
 ]);
+
+const labelSuffixes: Record<string, string> = {
+  'Height': 'cm',
+  'Weight': 'kg',
+};
 
 const ProfileRow: React.FC<RowProps> = ({
   item,
@@ -910,7 +919,7 @@ const ProfileRow: React.FC<RowProps> = ({
           <>
             <View style={styles.valueRow}>
               <Text style={[styles.rowValue, { color: theme.textPrimary }]}>
-                {item.value}
+                {item.value ? `${item.value}${labelSuffixes[item.label] ? ` ${labelSuffixes[item.label]}` : ''}` : '—'}
               </Text>
               {canShowRowEdit && (
                 <TouchableOpacity
@@ -1075,18 +1084,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16,
     borderColor: 'rgba(0,0,0,0.04)',
-    gap: 10,
     backgroundColor: 'rgba(0,0,0,0.015)',
     flexDirection: 'column',
     alignItems: 'flex-start',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  metaHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   metaLabel: {
-    fontSize: 11,
+    fontSize: 10,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    fontWeight: '600',
-    opacity: 0.6,
-    marginTop: 4,
+    letterSpacing: 0.8,
+    fontWeight: '700',
+    opacity: 0.5,
   },
   metaValue: {
     fontSize: 15,
