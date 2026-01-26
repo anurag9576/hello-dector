@@ -10,6 +10,10 @@ import { ThemePalette } from '../../../theme/palette';
 import DoctorHome from './DoctorHome';
 import DoctorProfile from './DoctorProfile';
 import DoctorChat from './DoctorChat';
+import DoctorAppointments from './DoctorAppointments';
+import DoctorCalendar from './DoctorCalendar';
+import DoctorPatients from './DoctorPatients';
+import DoctorPatientDetails, { PatientRecord } from './DoctorPatientDetails';
 
 // Placeholder components for other tabs
 const PlaceholderScreen = ({ title, theme }: { title: string; theme: ThemePalette }) => (
@@ -36,19 +40,35 @@ type DoctorTabsProps = {
 
 const DoctorTabs: React.FC<DoctorTabsProps> = ({ theme, onLogout }) => {
   const [activeTab, setActiveTab] = useState<TabKey>('home');
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [selectedPatientRecord, setSelectedPatientRecord] = useState<PatientRecord | null>(null);
 
   const renderContent = () => {
+    if (showCalendar && activeTab === 'home') {
+      return <DoctorCalendar theme={theme} onBack={() => setShowCalendar(false)} />;
+    }
+
+    if (selectedPatientRecord && activeTab === 'patients') {
+      return (
+        <DoctorPatientDetails 
+          theme={theme} 
+          patient={selectedPatientRecord} 
+          onBack={() => setSelectedPatientRecord(null)} 
+        />
+      );
+    }
+
     switch (activeTab) {
       case 'home':
-        return <DoctorHome theme={theme} onLogout={onLogout} />;
+        return <DoctorHome theme={theme} onLogout={onLogout} onViewCalendar={() => setShowCalendar(true)} />;
       case 'appointments':
-        return <PlaceholderScreen title="My Appointments" theme={theme} />;
+        return <DoctorAppointments theme={theme} onBack={() => setActiveTab('home')} />;
       case 'chat':
         return <DoctorChat theme={theme} onBack={() => setActiveTab('home')} />;
       case 'patients':
-        return <PlaceholderScreen title="My Patients" theme={theme} />;
+        return <DoctorPatients theme={theme} onSelectPatient={(p) => setSelectedPatientRecord(p)} onBack={() => setActiveTab('home')} />;
       case 'profile':
-        return <DoctorProfile theme={theme} onLogout={onLogout} />;
+        return <DoctorProfile theme={theme} onLogout={onLogout} onBack={() => setActiveTab('home')} />;
       default:
         return <DoctorHome theme={theme} onLogout={onLogout} />;
     }

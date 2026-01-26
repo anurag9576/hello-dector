@@ -15,9 +15,10 @@ import { useThemeContext } from '../../../theme/ThemeContext';
 type DoctorHomeProps = {
   theme: ThemePalette;
   onLogout: () => void;
+  onViewCalendar?: () => void;
 };
 
-const DoctorHome: React.FC<DoctorHomeProps> = ({ theme, onLogout }) => {
+const DoctorHome: React.FC<DoctorHomeProps> = ({ theme, onLogout, onViewCalendar }) => {
   const { mode } = useThemeContext();
 
   const metrics = [
@@ -112,7 +113,7 @@ const DoctorHome: React.FC<DoctorHomeProps> = ({ theme, onLogout }) => {
         <View style={styles.section}>
            <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Today's Queue</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={onViewCalendar}>
               <Text style={[styles.seeAll, { color: theme.hero }]}>View Calendar</Text>
             </TouchableOpacity>
           </View>
