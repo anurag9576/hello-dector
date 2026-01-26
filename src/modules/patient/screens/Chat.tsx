@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,13 @@ import {
   TouchableOpacity,
   FlatList,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
+  Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import { doctors as allDoctors, Doctor as GlobalDoctor } from '../../../data/doctors';
 import { ThemePalette } from '../../../theme/palette';
 import { usePatientProfile } from '../hooks/usePatientProfile';
 
@@ -28,7 +29,8 @@ type Doctor = {
 
 type ChatMessage = {
   id: string;
-  text: string;
+  text?: string;
+  imageUri?: string;
   isUser: boolean;
   timestamp: Date;
   sender?: string;
@@ -39,232 +41,274 @@ type ChatProps = {
   onBack: () => void;
 };
 
+const WhatsAppColors = {
+  header: '#F8FAFC',
+  background: '#ECE5DD',
+  userBubble: '#DCF8C6',
+  otherBubble: '#FFFFFF',
+  text: '#010101',
+  secondaryText: '#757575',
+  sendButton: '#075E54',
+  inputIcons: '#757575',
+  check: '#34B7F1',
+};
+
+// Seed doctors for initial state
+const initialDoctors: Doctor[] = [
+  {
+    id: 'Dr. Raghav Mehta',
+    name: 'Dr. Raghav Mehta',
+    specialty: 'Neurologist',
+    lastMessage: 'Check the Neurological report...',
+    lastMessageTime: '10:30 AM',
+    unreadCount: 2,
+    isOnline: true,
+    initials: 'RM',
+  },
+  {
+    id: 'Dr. Priya Sharma',
+    name: 'Dr. Priya Sharma',
+    specialty: 'Cardiologist',
+    lastMessage: 'Your ECG is fine.',
+    lastMessageTime: 'Yesterday',
+    unreadCount: 0,
+    isOnline: false,
+    initials: 'PS',
+  },
+];
+
 const Chat: React.FC<ChatProps> = ({ theme, onBack }) => {
   const { patientMeta } = usePatientProfile();
+  const [activeDoctors, setActiveDoctors] = useState<Doctor[]>(initialDoctors);
   const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
-  
-  const doctors: Doctor[] = [
-    {
-      id: '1',
-      name: 'Dr. Raghav Mehta',
-      specialty: 'Neurologist',
-      lastMessage: 'Thank you for sharing that. Based on your symptoms...',
-      lastMessageTime: '10:30 AM',
-      unreadCount: 2,
-      isOnline: true,
-      initials: 'RM',
-    },
-    {
-      id: '2',
-      name: 'Dr. Priya Sharma',
-      specialty: 'Cardiologist',
-      lastMessage: 'Your test results look good. Continue with...',
-      lastMessageTime: 'Yesterday',
-      unreadCount: 0,
-      isOnline: false,
-      initials: 'PS',
-    },
-    {
-      id: '3',
-      name: 'Dr. Amit Kumar',
-      specialty: 'General Physician',
-      lastMessage: 'Please take the medication as prescribed...',
-      lastMessageTime: 'Monday',
-      unreadCount: 1,
-      isOnline: true,
-      initials: 'AK',
-    },
-    {
-      id: '4',
-      name: 'Dr. Sneha Patel',
-      specialty: 'Dermatologist',
-      lastMessage: 'The rash should clear up in a few days...',
-      lastMessageTime: 'Sunday',
-      unreadCount: 0,
-      isOnline: false,
-      initials: 'SP',
-    },
-  ];
-
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: '1',
-      text: 'Hello! I\'m Dr. Raghav Mehta. How can I help you today?',
-      isUser: false,
-      timestamp: new Date(Date.now() - 3600000),
-      sender: 'Dr. Raghav Mehta',
-    },
-    {
-      id: '2',
-      text: 'Good morning doctor. I\'ve been experiencing frequent headaches lately.',
-      isUser: true,
-      timestamp: new Date(Date.now() - 3000000),
-    },
-    {
-      id: '3',
-      text: 'I understand. Can you tell me more about your headaches? When did they start and how often do you get them?',
-      isUser: false,
-      timestamp: new Date(Date.now() - 2400000),
-      sender: 'Dr. Raghav Mehta',
-    },
-    {
-      id: '4',
-      text: 'They started about 2 weeks ago. I get them almost daily, especially in the evenings.',
-      isUser: true,
-      timestamp: new Date(Date.now() - 1800000),
-    },
-  ]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
+  const [isSelectingDoctor, setIsSelectingDoctor] = useState(false);
+  const flatListRef = useRef<FlatList>(null);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
-  const selectedDoctorData = doctors.find(doc => doc.id === selectedDoctor);
+  const [messagesByDoctor, setMessagesByDoctor] = useState<Record<string, ChatMessage[]>>({
+    'Dr. Raghav Mehta': [
+      { id: '1', text: 'Hello! I\'m Dr. Raghav Mehta. How can I help you today?', isUser: false, timestamp: new Date(Date.now() - 3600000), sender: 'Dr. Raghav Mehta' },
+      { id: '2', text: 'Good morning doctor. I\'ve been experiencing frequent headaches lately.', isUser: true, timestamp: new Date(Date.now() - 3000000) },
+    ],
+    'Dr. Priya Sharma': [
+      { id: '3', text: 'Hello, I have reviewed your test results. Everything looks normal.', isUser: false, timestamp: new Date(Date.now() - 86400000), sender: 'Dr. Priya Sharma' },
+    ]
+  });
 
-  const sendMessage = () => {
-    if (inputMessage.trim()) {
+  // Filter doctors: only show those we have chatted with
+  const filteredDoctors = activeDoctors.filter(doc => {
+    const hasMessages = messagesByDoctor[doc.id] && messagesByDoctor[doc.id].length > 0;
+    const matchesSearch = doc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         doc.specialty.toLowerCase().includes(searchTerm.toLowerCase());
+    return hasMessages && matchesSearch;
+  });
+
+  const selectedDoctorData = activeDoctors.find(doc => doc.id === selectedDoctor);
+
+  const handleSelectDoctor = (doctor: GlobalDoctor) => {
+    // Check if hero is already in chat list
+    const existing = activeDoctors.find(d => d.name === doctor.name);
+    if (!existing) {
+      const newChatDoc: Doctor = {
+        id: doctor.name,
+        name: doctor.name,
+        specialty: doctor.specialty,
+        lastMessage: 'Starting a new conversation...',
+        lastMessageTime: 'Now',
+        unreadCount: 0,
+        isOnline: true,
+        initials: doctor.name.substring(0, 2).toUpperCase(),
+      };
+      setActiveDoctors(prev => [newChatDoc, ...prev]);
+      setSelectedDoctor(newChatDoc.id);
+    } else {
+      setSelectedDoctor(existing.id);
+    }
+    setIsSelectingDoctor(false);
+  };
+
+
+
+  const currentMessages = selectedDoctor ? (messagesByDoctor[selectedDoctor] || []) : [];
+
+  const sendMessage = (text?: string, imageUri?: string) => {
+    if ((text?.trim() || imageUri) && selectedDoctor) {
+      const displayTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const messagePreview = text?.trim() || (imageUri ? '📷 Photo' : '');
+
       const newMessage: ChatMessage = {
         id: Date.now().toString(),
-        text: inputMessage.trim(),
+        text: text?.trim(),
+        imageUri,
         isUser: true,
         timestamp: new Date(),
       };
 
-      setMessages(prev => [...prev, newMessage]);
-      setInputMessage('');
-      setIsTyping(true);
+      setMessagesByDoctor(prev => ({
+        ...prev,
+        [selectedDoctor]: [...(prev[selectedDoctor] || []), newMessage]
+      }));
+      
+      // Move doctor to top and update preview
+      setActiveDoctors(prev => {
+        const docIndex = prev.findIndex(d => d.id === selectedDoctor);
+        if (docIndex === -1) return prev;
+        const updatedDoc = { ...prev[docIndex], lastMessage: messagePreview, lastMessageTime: displayTime };
+        const otherDocs = prev.filter(d => d.id !== selectedDoctor);
+        return [updatedDoc, ...otherDocs];
+      });
 
-      // Simulate doctor response
-      setTimeout(() => {
-        const doctorResponse: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          text: 'Thank you for sharing that. Based on your symptoms, I recommend we schedule a consultation. Would you like to book an appointment?',
-          isUser: false,
-          timestamp: new Date(),
-          sender: selectedDoctorData?.name || 'Doctor',
-        };
-        setMessages(prev => [...prev, doctorResponse]);
-        setIsTyping(false);
-      }, 2000);
+      setInputMessage('');
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+
+      if (!imageUri) {
+        setIsTyping(true);
+        setTimeout(() => {
+          const responseText = 'I have received your message. How else can I assist you?';
+          const doctorResponse: ChatMessage = {
+            id: (Date.now() + 1).toString(),
+            text: responseText,
+            isUser: false,
+            timestamp: new Date(),
+            sender: selectedDoctor,
+          };
+          
+          setMessagesByDoctor(prev => ({
+            ...prev,
+            [selectedDoctor]: [...(prev[selectedDoctor] || []), doctorResponse]
+          }));
+
+          // Updated doctor preview for response
+          setActiveDoctors(prev => {
+            const docIndex = prev.findIndex(d => d.id === selectedDoctor);
+            if (docIndex === -1) return prev;
+            const updatedDoc = { ...prev[docIndex], lastMessage: responseText, lastMessageTime: 'Now' };
+            const otherDocs = prev.filter(d => d.id !== selectedDoctor);
+            return [updatedDoc, ...otherDocs];
+          });
+
+          setIsTyping(false);
+          setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+        }, 2000);
+      }
     }
   };
 
-  const suggestedQuestions = [
-    'I need a prescription refill',
-    'I have new symptoms to discuss',
-    'I want to book an appointment',
-    'I have questions about my test results',
-  ];
+  const handleCamera = async () => {
+    const result = await launchCamera({ mediaType: 'photo', quality: 0.8 });
+    if (result.assets && result.assets[0].uri) sendMessage(undefined, result.assets[0].uri);
+  };
+
+  const handleGallery = async () => {
+    const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8 });
+    if (result.assets && result.assets[0].uri) sendMessage(undefined, result.assets[0].uri);
+  };
 
   const renderDoctorItem = ({ item }: { item: Doctor }) => (
-    <TouchableOpacity
-      style={styles.doctorItem}
-      onPress={() => setSelectedDoctor(item.id)}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.doctorAvatar, { backgroundColor: theme.accent }]}>
-        <Text style={styles.doctorInitials}>{item.initials}</Text>
+    <TouchableOpacity style={styles.doctorItem} onPress={() => setSelectedDoctor(item.id)} activeOpacity={0.7}>
+      <View style={[styles.listAvatar, { backgroundColor: theme.softAccent }]}>
+        <Icon name="account" size={36} color={theme.accent} />
         {item.isOnline && <View style={[styles.onlineDot, { backgroundColor: '#22C55E' }]} />}
       </View>
       <View style={styles.doctorInfo}>
         <View style={styles.doctorHeader}>
-          <Text style={[styles.doctorName, { color: theme.textPrimary }]}>
-            {item.name}
-          </Text>
-          <Text style={[styles.doctorSpecialty, { color: theme.textSecondary }]}>
-            {item.specialty}
-          </Text>
+          <Text style={[styles.doctorName, { color: theme.textPrimary }]}>{item.name}</Text>
+          <Text style={[styles.lastMessageTime, { color: theme.textSecondary }]}>{item.lastMessageTime}</Text>
         </View>
-        <View style={styles.lastMessage}>
-          <Text
-            style={[styles.lastMessageText, { color: theme.textSecondary }]}
-            numberOfLines={1}
-          >
-            {item.lastMessage}
-          </Text>
-          <Text style={[styles.lastMessageTime, { color: theme.textSecondary }]}>
-            {item.lastMessageTime}
-          </Text>
+        <View style={styles.lastMessageRow}>
+          <Text style={[styles.lastMessageText, { color: theme.textSecondary }]} numberOfLines={1}>{item.lastMessage}</Text>
+          {item.unreadCount > 0 && (
+            <View style={[styles.unreadBadge, { backgroundColor: theme.accent }]}>
+              <Text style={styles.unreadCount}>{item.unreadCount}</Text>
+            </View>
+          )}
         </View>
       </View>
-      {item.unreadCount > 0 && (
-        <View style={[styles.unreadBadge, { backgroundColor: theme.accent }]}>
-          <Text style={styles.unreadCount}>{item.unreadCount}</Text>
-        </View>
-      )}
     </TouchableOpacity>
   );
 
   const renderMessage = ({ item }: { item: ChatMessage }) => (
-    <View style={item.isUser ? styles.userMessageContainer : styles.doctorMessageContainer}>
-      {!item.isUser && (
-        <View style={styles.doctorInfo}>
-          <View style={[styles.doctorAvatar, { backgroundColor: theme.accent }]}>
-            <Text style={styles.doctorInitials}>
-              {selectedDoctorData?.initials || 'DR'}
-            </Text>
-          </View>
-          <Text style={[styles.doctorName, { color: theme.textSecondary }]}>
-            {item.sender}
-          </Text>
+    <View style={[styles.messageContainer, item.isUser ? styles.userMessageAlign : styles.otherMessageAlign]}>
+      <View style={[styles.messageBubble, item.isUser ? styles.userBubble : styles.otherBubble]}>
+        {item.imageUri && <Image source={{ uri: item.imageUri }} style={styles.messageImage} />}
+        {item.text && <Text style={styles.messageText}>{item.text}</Text>}
+        <View style={styles.messageFooter}>
+          <Text style={styles.messageTime}>{item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+          {item.isUser && <Icon name="check-all" size={16} color={WhatsAppColors.check} style={styles.checkIcon} />}
         </View>
-      )}
-      <View style={item.isUser ? styles.userMessage : styles.doctorMessage}>
-        <Text style={[styles.messageText, { color: item.isUser ? '#fff' : theme.textPrimary }]}>
-          {item.text}
-        </Text>
-        <Text style={[styles.messageTime, { color: item.isUser ? '#fff8' : theme.textSecondary }]}>
-          {item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </Text>
       </View>
     </View>
   );
 
-  const renderSuggestedQuestion = (question: string, index: number) => (
-    <TouchableOpacity
-      key={index}
-      style={[styles.suggestedQuestion, { backgroundColor: theme.card, borderColor: theme.border }]}
-      onPress={() => {
-        setInputMessage(question);
-        setTimeout(() => sendMessage(), 100);
-      }}
-    >
-      <Text style={[styles.suggestedQuestionText, { color: theme.textPrimary }]}>
-        {question}
-      </Text>
-      <Icon name="send" size={16} color={theme.accent} />
-    </TouchableOpacity>
-  );
+  // Selector View (Top Doctors)
+  if (isSelectingDoctor) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+          <TouchableOpacity style={styles.backButton} onPress={() => setIsSelectingDoctor(false)}>
+            <Icon name="arrow-left" size={24} color={theme.textPrimary} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: theme.textPrimary, flex: 1 }]}>Top Doctors</Text>
+        </View>
+        <FlatList
+          data={allDoctors}
+          keyExtractor={item => item.name}
+          renderItem={({ item }) => (
+            <TouchableOpacity style={styles.doctorItem} onPress={() => handleSelectDoctor(item)}>
+              <View style={[styles.listAvatar, { backgroundColor: theme.softAccent }]}>
+                <Icon name="account" size={32} color={theme.accent} />
+              </View>
+              <View style={styles.doctorInfo}>
+                <Text style={[styles.doctorName, { color: theme.textPrimary }]}>{item.name}</Text>
+                <Text style={[styles.lastMessageText, { color: theme.textSecondary }]}>{item.specialty} • {item.experience}</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+        />
+      </View>
+    );
+  }
 
   // Doctor List View
   if (!selectedDoctor) {
     return (
-      <KeyboardAvoidingView 
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={50}
-      >
-        <View style={[styles.container, { backgroundColor: theme.background }]}>
-          <View style={[styles.header, { backgroundColor: 'transparent', borderBottomColor: theme.border }]}>
-            <TouchableOpacity style={styles.backButton} onPress={onBack}>
-              <Icon name="arrow-left" size={24} color={theme.textPrimary} />
-            </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
-              Chats
-            </Text>
-            <TouchableOpacity style={styles.newChatButton}>
-              <Icon name="plus" size={24} color={theme.accent} />
-            </TouchableOpacity>
-          </View>
-
-          <FlatList
-            data={doctors}
-            renderItem={renderDoctorItem}
-            keyExtractor={item => item.id}
-            style={styles.doctorsList}
-            contentContainerStyle={styles.doctorsListContent}
-            keyboardShouldPersistTaps={false}
-          />
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+          {!isSearchVisible ? (
+            <>
+              <TouchableOpacity style={styles.backButton} onPress={onBack}>
+                <Icon name="arrow-left" size={24} color={theme.textPrimary} />
+              </TouchableOpacity>
+              <Text style={[styles.headerTitle, { color: theme.textPrimary, flex: 1 }]}>Chats</Text>
+              <TouchableOpacity style={styles.headerIconButton} onPress={() => setIsSearchVisible(true)}>
+                <Icon name="magnify" size={24} color={theme.textPrimary} />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={styles.searchBarWrapper}>
+              <TouchableOpacity style={styles.backButton} onPress={() => { setIsSearchVisible(false); setSearchTerm(''); }}>
+                <Icon name="arrow-left" size={24} color={theme.textPrimary} />
+              </TouchableOpacity>
+              <TextInput
+                style={[styles.headerSearchInput, { color: theme.textPrimary }]}
+                placeholder="Search chats..."
+                placeholderTextColor={theme.textSecondary}
+                value={searchTerm}
+                onChangeText={setSearchTerm}
+                autoFocus
+              />
+              {searchTerm.length > 0 && <TouchableOpacity onPress={() => setSearchTerm('')}><Icon name="close" size={22} color={theme.textSecondary} /></TouchableOpacity>}
+            </View>
+          )}
         </View>
-      </KeyboardAvoidingView>
+        <FlatList data={filteredDoctors} renderItem={renderDoctorItem} keyExtractor={item => item.id} style={styles.doctorsList} />
+        <TouchableOpacity style={[styles.fab, { backgroundColor: theme.accent }]} onPress={() => setIsSelectingDoctor(true)}>
+          <Icon name="message-plus" size={26} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
     );
   }
 
@@ -272,58 +316,46 @@ const Chat: React.FC<ChatProps> = ({ theme, onBack }) => {
   return (
     <KeyboardAvoidingView 
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={50}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 80}
     >
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={[styles.header, { backgroundColor: 'transparent', borderBottomColor: theme.border }]}>
+      <View style={[styles.container, { backgroundColor: WhatsAppColors.background }]}>
+        <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
           <TouchableOpacity style={styles.backButton} onPress={() => setSelectedDoctor(null)}>
             <Icon name="arrow-left" size={24} color={theme.textPrimary} />
           </TouchableOpacity>
-          <View style={styles.headerContent}>
-            <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
-              {selectedDoctorData?.name}
-            </Text>
-            <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
-              {selectedDoctorData?.specialty} • {selectedDoctorData?.isOnline ? 'Online' : 'Offline'}
-            </Text>
+          <View style={styles.headerTitleContainer}>
+            <Text style={[styles.headerTitle, { color: theme.textPrimary }]} numberOfLines={1}>{selectedDoctorData?.name}</Text>
+            <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>{selectedDoctorData?.isOnline ? 'online' : 'last seen recently'}</Text>
           </View>
-          <View style={[styles.onlineIndicator, { backgroundColor: selectedDoctorData?.isOnline ? '#22C55E' : theme.textSecondary }]} />
+          <View style={styles.headerIcons}>
+            <TouchableOpacity style={styles.headerIconButton}><Icon name="video" size={24} color={theme.textPrimary} /></TouchableOpacity>
+            <TouchableOpacity style={styles.headerIconButton}><Icon name="phone" size={22} color={theme.textPrimary} /></TouchableOpacity>
+          </View>
         </View>
 
         <FlatList
-          data={messages}
+          ref={flatListRef}
+          data={currentMessages}
           renderItem={renderMessage}
           keyExtractor={item => item.id}
           style={styles.messagesList}
           contentContainerStyle={styles.messagesContent}
           keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
         />
 
-        {isTyping && (
-          <View style={styles.typingIndicator}>
-            <Text style={[styles.typingText, { color: theme.textSecondary }]}>
-              Doctor is typing...
-            </Text>
-          </View>
-        )}
+        {isTyping && <View style={styles.typingBubble}><Text style={styles.typingText}>typing...</Text></View>}
 
-        <View style={[styles.inputContainer, { backgroundColor: theme.card, borderTopColor: theme.border }]}>
-          <TextInput
-            style={[styles.textInput, { backgroundColor: theme.background, color: theme.textPrimary }]}
-            value={inputMessage}
-            onChangeText={setInputMessage}
-            placeholder="Type your message..."
-            placeholderTextColor={theme.textSecondary}
-            multiline
-            maxLength={500}
-          />
-          <TouchableOpacity
-            style={[styles.sendButton, { backgroundColor: inputMessage.trim() ? theme.accent : theme.textSecondary }]}
-            onPress={sendMessage}
-            disabled={!inputMessage.trim()}
-          >
-            <Icon name="send" size={20} color="#fff" />
+        <View style={styles.chatInputContainer}>
+          <View style={styles.inputWrapper}>
+            <TouchableOpacity style={styles.inputIconButton}><Icon name="emoticon-outline" size={24} color={WhatsAppColors.inputIcons} /></TouchableOpacity>
+            <TextInput style={styles.chatInput} value={inputMessage} onChangeText={setInputMessage} placeholder="Message" placeholderTextColor={WhatsAppColors.secondaryText} multiline />
+            <TouchableOpacity style={styles.inputIconButton} onPress={handleGallery}><Icon name="paperclip" size={24} color={WhatsAppColors.inputIcons} /></TouchableOpacity>
+            <TouchableOpacity style={styles.inputIconButton} onPress={handleCamera}><Icon name="camera" size={24} color={WhatsAppColors.inputIcons} /></TouchableOpacity>
+          </View>
+          <TouchableOpacity style={styles.whatsappSendBtn} onPress={() => sendMessage(inputMessage)}>
+            <Icon name={inputMessage.trim() ? "send" : "microphone"} size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </View>
@@ -338,217 +370,239 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 12,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   backButton: {
-    padding: 8,
+    padding: 4,
+    marginRight: 12,
   },
-  headerContent: {
+  headerTitleContainer: {
     flex: 1,
-    marginLeft: 12,
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  searchBarWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerSearchInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    paddingVertical: 8,
   },
   headerSubtitle: {
-    fontSize: 14,
-    marginTop: 2,
+    fontSize: 12,
+    marginTop: 1,
+    opacity: 0.7,
   },
-  onlineIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  headerIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  newChatButton: {
-    padding: 8,
+  headerIconButton: {
+    padding: 6,
   },
-  // Doctor List Styles
+  // Doctor List Item
   doctorsList: {
     flex: 1,
-  },
-  doctorsListContent: {
-    padding: 20,
   },
   doctorItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: '#FFFFFF',
   },
-  doctorAvatar: {
+  listAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  onlineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  doctorInfo: {
+    flex: 1,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#F1F5F9',
+    paddingBottom: 16,
+  },
+  doctorHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  doctorName: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  lastMessageTime: {
+    fontSize: 12,
+  },
+  lastMessageRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  lastMessageText: {
+    fontSize: 14,
+    flex: 1,
+  },
+  unreadBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  unreadCount: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
     width: 56,
     height: 56,
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
-  doctorInitials: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  onlineDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  doctorInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  doctorHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  doctorName: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  doctorSpecialty: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  lastMessage: {
-    gap: 2,
-  },
-  lastMessageText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  lastMessageTime: {
-    fontSize: 12,
-    color: '#9CA3AF',
-  },
-  unreadBadge: {
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  unreadCount: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  // Chat Styles
+  // Chat Messages
   messagesList: {
     flex: 1,
   },
   messagesContent: {
-    padding: 20,
+    padding: 10,
+    paddingBottom: 20,
   },
-  userMessageContainer: {
+  messageContainer: {
+    marginBottom: 4,
+    width: '100%',
+  },
+  userMessageAlign: {
     alignItems: 'flex-end',
-    marginBottom: 16,
   },
-  doctorMessageContainer: {
+  otherMessageAlign: {
     alignItems: 'flex-start',
-    marginBottom: 16,
   },
-  userMessage: {
-    backgroundColor: '#2563EB',
-    maxWidth: '80%',
-    borderRadius: 20,
-    borderBottomRightRadius: 4,
-    padding: 12,
-    paddingHorizontal: 16,
+  messageBubble: {
+    padding: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    maxWidth: '85%',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 1,
+    shadowOffset: { width: 0, height: 1 },
   },
-  doctorMessage: {
-    backgroundColor: '#F3F4F6',
-    maxWidth: '80%',
-    borderRadius: 20,
-    borderBottomLeftRadius: 4,
-    padding: 12,
-    paddingHorizontal: 16,
+  userBubble: {
+    backgroundColor: WhatsAppColors.userBubble,
+  },
+  otherBubble: {
+    backgroundColor: WhatsAppColors.otherBubble,
+  },
+  messageImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 8,
+    marginBottom: 4,
   },
   messageText: {
     fontSize: 16,
     lineHeight: 22,
   },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 2,
+  },
   messageTime: {
     fontSize: 11,
-    marginTop: 4,
-  },
-  typingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 4,
-  },
-  typingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
     opacity: 0.6,
   },
+  checkIcon: {
+    marginLeft: 4,
+  },
+  typingBubble: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
   typingText: {
-    fontSize: 14,
-    color: '#6B7280',
+    opacity: 0.6,
     fontStyle: 'italic',
+    fontSize: 12,
   },
-  suggestedQuestions: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  suggestedTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  suggestedQuestionsList: {
-    gap: 8,
-  },
-  suggestedQuestion: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  suggestedQuestionText: {
-    fontSize: 14,
-    fontWeight: '500',
-    flex: 1,
-  },
-  inputContainer: {
+  // WhatsApp Chat Input
+  chatInputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    gap: 12,
+    padding: 8,
+    gap: 8,
   },
-  textInput: {
+  inputWrapper: {
     flex: 1,
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    maxHeight: 100,
-    fontSize: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 25,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    minHeight: 48,
+    maxHeight: 120,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  chatInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  inputIconButton: {
+    padding: 8,
+  },
+  whatsappSendBtn: {
+    backgroundColor: '#075E54',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 2,
   },
 });
 

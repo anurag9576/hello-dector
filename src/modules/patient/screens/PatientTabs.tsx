@@ -7,6 +7,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Keyboard,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import HomeScreen from './PatientHome';
@@ -60,6 +61,12 @@ const profileSections: { title: string; items: ProfileMenuItem[] }[] = [
         subtitle: 'Download prescriptions & lab PDFs',
         icon: 'file-chart',
       },
+      {
+        key: 'top_doctors',
+        label: 'Top Doctor',
+        subtitle: 'Connect with expert specialists',
+        icon: 'stethoscope',
+      },
     ],
   },
   {
@@ -93,6 +100,7 @@ type ProfileTabProps = {
   onProfilePress: () => void;
   onSettingsPress: () => void;
   onReportsPress: () => void;
+  onTopDoctorsPress: () => void;
   onHelpPress: () => void;
   onPoliciesPress: () => void;
 };
@@ -103,6 +111,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
   onProfilePress,
   onSettingsPress,
   onReportsPress,
+  onTopDoctorsPress,
   onHelpPress,
   onPoliciesPress,
 }) => {
@@ -121,6 +130,10 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
     }
     if (item.key === 'reports') {
       onReportsPress();
+      return;
+    }
+    if (item.key === 'top_doctors') {
+      onTopDoctorsPress();
       return;
     }
     if (item.key === 'help') {
@@ -224,6 +237,7 @@ type PatientTabsProps = {
 const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
   const { patientMeta } = usePatientProfile();
   const [activeTab, setActiveTab] = useState<TabKey>('home');
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isReportsOpen, setIsReportsOpen] = useState(false);
@@ -234,6 +248,15 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
   const [doctorListType, setDoctorListType] = useState<DoctorListType>(null);
 
   useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+
     const handleBack = () => {
       if (isSettingsOpen) {
         setIsSettingsOpen(false);
@@ -269,7 +292,11 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
       'hardwareBackPress',
       handleBack,
     );
-    return () => subscription.remove();
+    return () => {
+      subscription.remove();
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
   }, [activeTab, isProfileOpen, isSettingsOpen, isReportsOpen, isHelpCenterOpen, isPoliciesOpen, isChatOpen, isDoctorListOpen]);
 
   const handleTabPress = (tabKey: TabKey) => {
@@ -396,6 +423,7 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
             onProfilePress={() => setIsProfileOpen(true)}
             onSettingsPress={() => setIsSettingsOpen(true)}
             onReportsPress={() => setIsReportsOpen(true)}
+            onTopDoctorsPress={() => handleSeeAllDoctors()}
             onHelpPress={() => setIsHelpCenterOpen(true)}
             onPoliciesPress={() => setIsPoliciesOpen(true)}
           />
@@ -417,12 +445,13 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
   return (
     <View style={styles.container}>
       <View style={styles.content}>{renderContent()}</View>
-      <View
-        style={[
-          styles.tabBar,
-          { backgroundColor: theme.card, borderColor: theme.border },
-        ]}
-      >
+      {!isKeyboardVisible && (
+        <View
+          style={[
+            styles.tabBar,
+            { backgroundColor: theme.card, borderColor: theme.border },
+          ]}
+        >
         {tabs.map(tab => {
           const isActive = activeTab === tab.key;
           return (
@@ -470,7 +499,8 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
             </TouchableOpacity>
           );
         })}
-      </View>
+        </View>
+      )}
     </View>
   );
 };

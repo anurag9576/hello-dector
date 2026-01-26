@@ -18,6 +18,7 @@ import QuickActions from '../components/QuickActions';
 import DoctorCard from '../components/DoctorCard';
 import BookingForm, { BookingFormData } from '../components/BookingForm';
 import { usePatientProfile } from '../hooks/usePatientProfile';
+import { useLiveWeather } from '../hooks/useLiveWeather';
 
 Icon.loadFont();
 
@@ -32,6 +33,7 @@ type PatientHomeProps = {
 const PatientHome: React.FC<PatientHomeProps> = ({ theme, onSeeAllDoctors, onSeeAllSpecialties, onSeeAllAppointments, onOpenChat }) => {
   const { mode } = useThemeContext();
   const { patientMeta } = usePatientProfile();
+  const weather = useLiveWeather(patientMeta.city || 'Pune');
   const topDoctorsRef = useRef<View>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -109,19 +111,21 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme, onSeeAllDoctors, onSee
   const wellnessHighlights = [
     {
       label: 'Temperature',
-      value: '28°C',
-      status: 'Light breeze',
+      value: weather.loading ? '--' : weather.temp,
+      status: weather.loading ? 'Updating...' : `${weather.condition} · ${patientMeta.city || 'Pune'}`,
       icon: 'weather-partly-cloudy',
-      iconColor: theme.accent,
-      background: mode === 'dark' ? theme.softAccent : '#EEF4FF',
+      iconColor: '#2D7FF9', 
+      background: mode === 'dark' ? 'rgba(45, 127, 249, 0.1)' : '#EFF6FF',
+      statusColor: '#2D7FF9', 
     },
     {
       label: 'Air Quality',
-      value: 'Good',
-      status: 'AQI 42',
+      value: weather.loading ? '--' : weather.aqiLabel,
+      status: weather.loading ? 'Fetching...' : weather.aqi,
       icon: 'leaf',
-      iconColor: theme.success,
-      background: mode === 'dark' ? theme.softAccent : '#ECFDF5',
+      iconColor: '#10B981', 
+      background: mode === 'dark' ? 'rgba(16, 185, 129, 0.1)' : '#ECFDF5',
+      statusColor: '#1B998B', // Teal status for AQI
     },
   ];
 
@@ -298,7 +302,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme, onSeeAllDoctors, onSee
               <Text style={[styles.metricValue, { color: theme.textPrimary }]}>
                 {item.value}
               </Text>
-              <Text style={[styles.metricStatus, { color: theme.accent }]}>
+              <Text style={[styles.metricStatus, { color: item.statusColor ?? theme.accent }]}>
                 {item.status}
               </Text>
             </View>
@@ -459,7 +463,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme, onSeeAllDoctors, onSee
           </TouchableOpacity>
         </View>
         {filteredDoctors.length ? (
-          filteredDoctors.map(doctor => (
+          filteredDoctors.slice(0, 3).map(doctor => (
             <DoctorCard key={doctor.name} doctor={doctor} theme={theme} onBook={handleBookAppointment} />
           ))
         ) : (
@@ -546,6 +550,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     opacity: 0.9,
     lineHeight: 22,
+    marginBottom: 8,
+  },
+  locationContainer: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  locationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  locationText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   greetingBadge: {
     backgroundColor: 'rgba(255,255,255,0.15)',
