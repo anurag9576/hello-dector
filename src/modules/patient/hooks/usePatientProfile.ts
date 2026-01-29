@@ -41,7 +41,7 @@ export const usePatientProfile = () => {
       try {
         setLoading(true);
         const session = await getUserSession();
-        const userId = session?.user?.id || session?.id || session?.userId;
+        const userId = session?.userId || session?.user?.id || session?.data?._id || session?.data?.id || session?._id || session?.id;
         
         if (!userId) {
           console.warn('No userId found in session, skipping profile fetch');
@@ -49,7 +49,7 @@ export const usePatientProfile = () => {
           return;
         }
 
-        const response = await apiCall(`/get-profile?userId=${userId}`, 'GET');
+        const response = await apiCall(`patient/get-profile?userId=${userId}`, 'GET');
         if (response && response.data) {
           const profileData = response.data;
           setFullProfile(profileData);

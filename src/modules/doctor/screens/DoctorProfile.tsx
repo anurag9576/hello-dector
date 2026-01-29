@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -12,9 +12,15 @@ import {
   Platform,
   Modal,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { launchImageLibrary } from 'react-native-image-picker';
 import { ThemePalette } from '../../../theme/palette';
+import { getDoctorProfile, saveDoctorProfile, updateDoctorProfile } from '../../../utils/api';
+import { getUserSession } from '../../../utils/storage';
+
+Icon.loadFont();
 
 type DoctorProfileProps = {
   theme: ThemePalette;
@@ -42,8 +48,59 @@ const DoctorProfile: React.FC<DoctorProfileProps> = ({ theme, onLogout, onBack }
     experience: '12 Years Experience',
     degree: 'MBBS, MD',
     clinic: 'HelloDoctor Clinic, Pune',
+    about: 'I am a passionate cardiologist dedicated to providing the best heart care services with a focus on preventive measures and patient education.',
+    languages: 'English, Hindi, Marathi',
+    onlineFees: '800',
+    clinicFees: '1200',
+    services: 'Heart Failure Management, Angioplasty, Preventive Cardiology',
+    phone: '',
+    profileImage: '',
   });
   const [editForm, setEditForm] = useState(profile);
+  const [loading, setLoading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    setLoading(true);
+    try {
+      const session = await getUserSession();
+      const uid = session?.userId || session?.user?.id || session?.data?._id || session?.data?.id || session?._id || session?.id;
+      if (uid) setUserId(uid);
+      
+      const res = await getDoctorProfile();
+      if (res && (res.data || res.profile)) {
+        const data = res.data || res.profile;
+        const mappedProfile = {
+          name: data.basicInfo?.name || profile.name,
+          specialty: data.basicInfo?.specialty || profile.specialty,
+          experience: data.basicInfo?.experience || profile.experience,
+          degree: data.basicInfo?.degree || profile.degree,
+          clinic: data.basicInfo?.clinic || profile.clinic,
+          about: data.patientCentricDetails?.about || profile.about,
+          languages: data.patientCentricDetails?.languages || profile.languages,
+          onlineFees: data.consultationFees?.online || profile.onlineFees,
+          clinicFees: data.consultationFees?.clinic || profile.clinicFees,
+          services: Array.isArray(data.patientCentricDetails?.services) 
+            ? data.patientCentricDetails.services.join(', ') 
+            : profile.services,
+          phone: data.userId?.phone || '',
+          profileImage: data.basicInfo?.profileImage || '',
+        };
+        setProfile(mappedProfile);
+        setEditForm(mappedProfile);
+        setIsOnline(data.currentStatus?.isAcceptingNewPatients ?? true);
+        setNotificationsEnabled(data.currentStatus?.notificationsEnabled ?? true);
+      }
+    } catch (error) {
+      console.log('Profile fetch note:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const medicalDegrees = [
     'MBBS', 'MD', 'MS', 'BDS', 'MDS', 'BAMS', 'BHMS', 'BUMS', 'DNB', 'PhD', 'MCh', 'DM', 'FRCP', 'FRCS', 'Diploma'
@@ -56,10 +113,113 @@ const DoctorProfile: React.FC<DoctorProfileProps> = ({ theme, onLogout, onBack }
     ]);
   };
 
-  const handleSave = () => {
-    setProfile(editForm);
-    setShowEditModal(false);
-    Alert.alert('Success', 'Profile updated successfully');
+  const handleSelectImage = () => {
+    launchImageLibrary({ mediaType: 'photo', quality: 0.7 }, (response) => {
+      if (response.didCancel) return;
+      if (response.errorCode) {
+        Alert.alert('Error', response.errorMessage);
+        return;
+      }
+      if (response.assets && response.assets.length > 0) {
+        const uri = response.assets[0].uri;
+        if (uri) {
+          setEditForm(prev => ({ ...prev, profileImage: uri }));
+        }
+      }
+    });
+  };
+
+  const handleSave = async () => {
+    let currentUserId = userId;
+    if (!currentUserId) {
+      const session = await getUserSession();
+      currentUserId = session?.userId || session?.user?.id || session?.data?._id || session?.data?.id || session?._id || session?.id;
+      if (!currentUserId) {
+        Alert.alert('Error', 'Please login again to update profile');
+        return;
+      }
+      setUserId(currentUserId);
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        userId: currentUserId,
+        basicInfo: {
+          name: editForm.name,
+          specialty: editForm.specialty,
+          experience: editForm.experience,
+          degree: editForm.degree,
+          clinic: editForm.clinic,
+          profileImage: editForm.profileImage,
+          phone: editForm.phone
+        },
+        patientCentricDetails: {
+          about: editForm.about,
+          languages: editForm.languages,
+          services: editForm.services.split(',').map(s => s.trim())
+        },
+        consultationFees: {
+          online: editForm.onlineFees,
+          clinic: editForm.clinicFees
+        },
+        publicStats: {
+          totalPatients: '12k+',
+          averageRating: 4.9,
+          totalReviews: '2.5k'
+        },
+        currentStatus: {
+          isAcceptingNewPatients: isOnline,
+          notificationsEnabled: notificationsEnabled,
+          isVerified: true
+        }
+      };
+
+      const response = await updateDoctorProfile(payload);
+      const updatedData = response.profile || response.data || editForm;
+      
+      const updatedProfile = {
+        name: updatedData.basicInfo?.name || editForm.name,
+        specialty: updatedData.basicInfo?.specialty || editForm.specialty,
+        experience: updatedData.basicInfo?.experience || editForm.experience,
+        degree: updatedData.basicInfo?.degree || editForm.degree,
+        clinic: updatedData.basicInfo?.clinic || editForm.clinic,
+        about: updatedData.patientCentricDetails?.about || editForm.about,
+        languages: updatedData.patientCentricDetails?.languages || editForm.languages,
+        onlineFees: updatedData.consultationFees?.online || editForm.onlineFees,
+        clinicFees: updatedData.consultationFees?.clinic || editForm.clinicFees,
+        services: Array.isArray(updatedData.patientCentricDetails?.services) 
+          ? updatedData.patientCentricDetails.services.join(', ') 
+          : editForm.services,
+        phone: updatedData.userId?.phone || updatedData.basicInfo?.phone || editForm.phone,
+        profileImage: updatedData.basicInfo?.profileImage || editForm.profileImage,
+      };
+
+      setProfile(updatedProfile);
+      setEditForm(updatedProfile);
+      setShowEditModal(false);
+      Alert.alert('Success', 'Profile updated successfully');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateStatus = async (type: 'online' | 'notifications', value: boolean) => {
+    if (!userId) return;
+    try {
+      const payload = {
+        userId: userId,
+        currentStatus: {
+          isAcceptingNewPatients: type === 'online' ? value : isOnline,
+          notificationsEnabled: type === 'notifications' ? value : notificationsEnabled,
+        }
+      };
+      await saveDoctorProfile(payload);
+    } catch (error) {
+      console.log('Status update note:', error);
+    }
   };
 
   const menuItems: { title: string; items: ProfileSectionItem[] }[] = [
@@ -67,8 +227,8 @@ const DoctorProfile: React.FC<DoctorProfileProps> = ({ theme, onLogout, onBack }
       title: 'Practice Management',
       items: [
         { label: 'Manage Schedule', icon: 'calendar-clock', type: 'link', color: '#4F46E5' },
-        { label: 'Clinic Details', icon: 'hospital-building', value: 'HelloDoctor Clinic, Pune', type: 'link', color: '#10B981' },
-        { label: 'Consultation Fees', icon: 'cash', value: '₹500 - ₹1500', type: 'link', color: '#F59E0B' },
+        { label: 'Clinic Details', icon: 'hospital-building', value: profile.clinic, type: 'link', color: '#10B981' },
+        { label: 'Consultation Fees', icon: 'cash', value: `Online: ₹${profile.onlineFees} • Clinic: ₹${profile.clinicFees}`, type: 'link', color: '#F59E0B' },
       ],
     },
     {
@@ -113,13 +273,20 @@ const DoctorProfile: React.FC<DoctorProfileProps> = ({ theme, onLogout, onBack }
         {/* Modern Profile Header */}
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <View style={styles.avatarWrapper}>
-               <Image
-                  source={require('../../../screens/image/logo.png')}
-                  style={styles.avatar}
-               />
-               <View style={styles.onlineBadge} />
-            </View>
+            <TouchableOpacity style={styles.avatarWrapper} onPress={handleSelectImage}>
+                {profile.profileImage && profile.profileImage.trim() !== '' ? (
+                   <Image source={{ uri: profile.profileImage }} style={styles.avatar} />
+                ) : (
+                   <Image 
+                      source={require('../../../screens/image/logo.png')} 
+                      style={[styles.avatar, { backgroundColor: '#FFF' }]} 
+                   />
+                )}
+               <View style={[styles.onlineBadge, { backgroundColor: isOnline ? '#10B981' : '#64748B' }]} />
+               <View style={styles.editImageBadge}>
+                  <Icon name="camera" size={12} color="#FFF" />
+               </View>
+            </TouchableOpacity>
             <View style={styles.profileMain}>
               <View style={styles.nameRow}>
                 <Text style={[styles.name, { color: theme.textPrimary }]}>{profile.name}</Text>
@@ -127,6 +294,10 @@ const DoctorProfile: React.FC<DoctorProfileProps> = ({ theme, onLogout, onBack }
               </View>
               <Text style={[styles.specialty, { color: theme.accent }]}>{profile.specialty}</Text>
               <Text style={[styles.experience, { color: theme.textSecondary }]}>{profile.degree} • {profile.experience}</Text>
+              <View style={styles.phoneRow}>
+                <Icon name="phone" size={14} color={theme.textSecondary} />
+                <Text style={[styles.phoneText, { color: theme.textSecondary }]}>{profile.phone || 'No phone added'}</Text>
+              </View>
             </View>
             <TouchableOpacity 
                 style={[styles.editBtn, { backgroundColor: theme.card }]}
@@ -156,6 +327,40 @@ const DoctorProfile: React.FC<DoctorProfileProps> = ({ theme, onLogout, onBack }
           </View>
         </View>
 
+        {/* About Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionHeader, { color: theme.textSecondary }]}>About Me</Text>
+          <View style={[styles.sectionBody, { backgroundColor: theme.card, padding: 16 }]}>
+            <Text style={[styles.aboutText, { color: theme.textPrimary }]}>
+              {profile.about}
+            </Text>
+          </View>
+        </View>
+
+        {/* Expertise & Services */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionHeader, { color: theme.textSecondary }]}>Expertise & Services</Text>
+          <View style={[styles.sectionBody, { backgroundColor: theme.card, padding: 16 }]}>
+            <View style={styles.tagContainer}>
+              {profile.services.split(',').map((service, i) => (
+                <View key={i} style={[styles.tag, { backgroundColor: theme.accent + '15' }]}>
+                  <Text style={[styles.tagText, { color: theme.accent }]}>{service.trim()}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        {/* Languages */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionHeader, { color: theme.textSecondary }]}>Languages</Text>
+          <View style={[styles.sectionBody, { backgroundColor: theme.card, padding: 16, flexDirection: 'row', gap: 8 }]}>
+            <Icon name="translate" size={20} color={theme.accent} />
+            <Text style={[styles.itemLabel, { color: theme.textPrimary }]}>
+              {profile.languages}
+            </Text>
+          </View>
+        </View>
 
         {/* Setting Groups */}
         {menuItems.map((section, index) => (
@@ -181,7 +386,15 @@ const DoctorProfile: React.FC<DoctorProfileProps> = ({ theme, onLogout, onBack }
                     {item.type === 'toggle' ? (
                        <Switch
                           value={item.label === 'Accepting New Patients' ? isOnline : notificationsEnabled}
-                          onValueChange={(val) => item.label === 'Accepting New Patients' ? setIsOnline(val) : setNotificationsEnabled(val)}
+                          onValueChange={(val) => {
+                            if (item.label === 'Accepting New Patients') {
+                              setIsOnline(val);
+                              updateStatus('online', val);
+                            } else {
+                              setNotificationsEnabled(val);
+                              updateStatus('notifications', val);
+                            }
+                          }}
                           trackColor={{ false: theme.border, true: '#10B981' }}
                           thumbColor="#FFF"
                        />
@@ -237,6 +450,23 @@ const DoctorProfile: React.FC<DoctorProfileProps> = ({ theme, onLogout, onBack }
             </View>
 
             <ScrollView contentContainerStyle={styles.modalScroll}>
+               <View style={styles.modalAvatarSection}>
+                  <TouchableOpacity style={styles.modalAvatarWrapper} onPress={handleSelectImage}>
+                    {editForm.profileImage && editForm.profileImage.trim() !== '' ? (
+                       <Image source={{ uri: editForm.profileImage }} style={styles.modalAvatar} />
+                    ) : (
+                       <Image 
+                          source={require('../../../screens/image/logo.png')} 
+                          style={[styles.modalAvatar, { backgroundColor: '#FFF' }]} 
+                       />
+                    )}
+                    <View style={styles.modalEditBadge}>
+                      <Icon name="camera-plus" size={20} color="#FFF" />
+                    </View>
+                  </TouchableOpacity>
+                  <Text style={[styles.modalHint, { color: theme.textSecondary }]}>Tap to change profile picture</Text>
+               </View>
+
                <View style={styles.inputGroup}>
                   <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Full Name</Text>
                   <TextInput
@@ -247,6 +477,18 @@ const DoctorProfile: React.FC<DoctorProfileProps> = ({ theme, onLogout, onBack }
                     placeholderTextColor={theme.textSecondary}
                   />
                </View>
+
+                <View style={styles.inputGroup}>
+                   <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Phone Number</Text>
+                   <TextInput
+                     style={[styles.formInput, { color: theme.textPrimary, borderColor: theme.border, backgroundColor: theme.card }]}
+                     value={editForm.phone}
+                     onChangeText={(t) => setEditForm(f => ({ ...f, phone: t.replace(/[^0-9]/g, '') }))}
+                     placeholder="Phone number"
+                     keyboardType="phone-pad"
+                     placeholderTextColor={theme.textSecondary}
+                   />
+                </View>
 
                <View style={styles.inputGroup}>
                   <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Specialty</Text>
@@ -299,11 +541,76 @@ const DoctorProfile: React.FC<DoctorProfileProps> = ({ theme, onLogout, onBack }
                   />
                </View>
 
+               <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>About Me (Bio)</Text>
+                  <TextInput
+                    style={[styles.formInput, { color: theme.textPrimary, borderColor: theme.border, backgroundColor: theme.card, height: 100, textAlignVertical: 'top' }]}
+                    value={editForm.about}
+                    onChangeText={(t) => setEditForm(f => ({ ...f, about: t }))}
+                    placeholder="Describe your expertise and vision..."
+                    placeholderTextColor={theme.textSecondary}
+                    multiline={true}
+                    numberOfLines={4}
+                  />
+               </View>
+
+               <View style={styles.inputRow}>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Online Fees (₹)</Text>
+                    <TextInput
+                      style={[styles.formInput, { color: theme.textPrimary, borderColor: theme.border, backgroundColor: theme.card }]}
+                      value={editForm.onlineFees}
+                      onChangeText={(t) => setEditForm(f => ({ ...f, onlineFees: t.replace(/[^0-9]/g, '') }))}
+                      placeholder="e.g. 500"
+                      keyboardType="numeric"
+                      placeholderTextColor={theme.textSecondary}
+                    />
+                  </View>
+                  <View style={[styles.inputGroup, { flex: 1, marginLeft: 12 }]}>
+                    <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Clinic Fees (₹)</Text>
+                    <TextInput
+                      style={[styles.formInput, { color: theme.textPrimary, borderColor: theme.border, backgroundColor: theme.card }]}
+                      value={editForm.clinicFees}
+                      onChangeText={(t) => setEditForm(f => ({ ...f, clinicFees: t.replace(/[^0-9]/g, '') }))}
+                      placeholder="e.g. 1000"
+                      keyboardType="numeric"
+                      placeholderTextColor={theme.textSecondary}
+                    />
+                  </View>
+               </View>
+
+               <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Languages (Comma separated)</Text>
+                  <TextInput
+                    style={[styles.formInput, { color: theme.textPrimary, borderColor: theme.border, backgroundColor: theme.card }]}
+                    value={editForm.languages}
+                    onChangeText={(t) => setEditForm(f => ({ ...f, languages: t }))}
+                    placeholder="e.g. English, Hindi, Spanish"
+                    placeholderTextColor={theme.textSecondary}
+                  />
+               </View>
+
+               <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Services Offered (Comma separated)</Text>
+                  <TextInput
+                    style={[styles.formInput, { color: theme.textPrimary, borderColor: theme.border, backgroundColor: theme.card }]}
+                    value={editForm.services}
+                    onChangeText={(t) => setEditForm(f => ({ ...f, services: t }))}
+                    placeholder="e.g. General Checkup, Heart Surgery"
+                    placeholderTextColor={theme.textSecondary}
+                  />
+               </View>
+
                <TouchableOpacity 
-                  style={[styles.saveBtn, { backgroundColor: theme.accent }]}
+                  style={[styles.saveBtn, { backgroundColor: theme.accent, opacity: loading ? 0.7 : 1 }]}
                   onPress={handleSave}
+                  disabled={loading}
                >
-                  <Text style={styles.saveBtnText}>Save Changes</Text>
+                  {loading ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <Text style={styles.saveBtnText}>Save Changes</Text>
+                  )}
                </TouchableOpacity>
 
                <TouchableOpacity 
@@ -669,10 +976,93 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  aboutText: {
+    fontSize: 14,
+    lineHeight: 22,
+    opacity: 0.9,
+  },
+  tagContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  tagText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
   footerText: {
     fontSize: 11,
     marginTop: 4,
     opacity: 0.7,
+  },
+  editImageBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#3B82F6',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  phoneText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  modalAvatarSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+    gap: 8,
+  },
+  modalAvatarWrapper: {
+    position: 'relative',
+  },
+  modalAvatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: '#3B82F6',
+  },
+  modalEditBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: '#3B82F6',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#FFF',
+  },
+  modalHint: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  inputHint: {
+    opacity: 0.6,
+  },
+  fallbackAvatar: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
   },
 });
 

@@ -276,7 +276,7 @@ const Profile: React.FC<ProfileProps> = ({ theme, onBack }) => {
     try {
       setLoading(true);
       const session = await getUserSession();
-      const userId = session?.user?.id || session?.id || session?.userId;
+      const userId = session?.userId || session?.user?.id || session?.data?._id || session?.data?.id || session?._id || session?.id;
       
       await updatePatientProfile({ userId, ...payload });
 

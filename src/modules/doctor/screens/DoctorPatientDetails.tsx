@@ -49,7 +49,13 @@ const DoctorPatientDetails: React.FC<DoctorPatientDetailsProps> = ({ theme, pati
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
          {/* Patient Hero Section */}
          <View style={[styles.heroSection, { backgroundColor: theme.card }]}>
-            <Image source={{ uri: patient.avatar }} style={styles.avatar} />
+             {patient.avatar ? (
+                <Image source={{ uri: patient.avatar }} style={styles.avatar} />
+             ) : (
+                <View style={[styles.avatar, { backgroundColor: theme.accent + '15', justifyContent: 'center', alignItems: 'center' }]}>
+                   <Icon name="account" size={48} color={theme.accent} />
+                </View>
+             )}
             <View style={styles.heroInfo}>
                <Text style={[styles.patientName, { color: theme.textPrimary }]}>{patient.name}</Text>
                <Text style={[styles.patientMeta, { color: theme.textSecondary }]}>

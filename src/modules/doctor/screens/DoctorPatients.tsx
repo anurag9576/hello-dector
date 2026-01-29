@@ -79,7 +79,13 @@ const DoctorPatients: React.FC<DoctorPatientsProps> = ({ theme, onSelectPatient,
       onPress={() => onSelectPatient(patient)}
     >
       <View style={styles.cardTop}>
-         <Image source={{ uri: patient.avatar }} style={styles.patientAvatar} />
+         {patient.avatar ? (
+           <Image source={{ uri: patient.avatar }} style={styles.patientAvatar} />
+         ) : (
+           <View style={[styles.patientAvatar, { backgroundColor: theme.accent + '15', justifyContent: 'center', alignItems: 'center' }]}>
+             <Icon name="account" size={30} color={theme.accent} />
+           </View>
+         )}
          <View style={styles.basicInfo}>
             <Text style={[styles.patientName, { color: theme.textPrimary }]}>{patient.name}</Text>
             <Text style={[styles.patientMeta, { color: theme.textSecondary }]}>

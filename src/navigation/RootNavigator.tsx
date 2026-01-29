@@ -24,6 +24,7 @@ type OtpPayload = {
   backScreen: AppScreen;
   successScreen: AppScreen;
   userId?: string;
+  token?: string;
 };
 type RecoveryPayload = OtpPayload | null;
 type NavigationState = {
@@ -112,6 +113,7 @@ const RootNavigator = () => {
                 backScreen: 'login',
                 successScreen: payload.role === 'doctor' ? 'doctor_home' : 'home',
                 userId: payload.userId,
+                token: (payload as any).token, // Include token
               })
             }
           />
@@ -164,7 +166,8 @@ const RootNavigator = () => {
                 await saveUserSession({
                   contact: recoveryPayload?.contact,
                   role,
-                  id: recoveryPayload?.userId
+                  id: recoveryPayload?.userId,
+                  token: recoveryPayload?.token, // Save the token
                 });
                 setScreen(recoveryPayload?.successScreen ?? 'login');
               }

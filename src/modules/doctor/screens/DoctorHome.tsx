@@ -11,6 +11,8 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { ThemePalette } from '../../../theme/palette';
 import { useThemeContext } from '../../../theme/ThemeContext';
+import { getDoctorProfile } from '../../../utils/api';
+import { getUserSession } from '../../../utils/storage';
 
 type DoctorHomeProps = {
   theme: ThemePalette;
@@ -20,6 +22,51 @@ type DoctorHomeProps = {
 
 const DoctorHome: React.FC<DoctorHomeProps> = ({ theme, onLogout, onViewCalendar }) => {
   const { mode } = useThemeContext();
+  const [profile, setProfile] = React.useState({ name: '', profileImage: '' });
+  const [isReady, setIsReady] = React.useState(false);
+
+  React.useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        const session = await getUserSession();
+        if (session && (session.user || session.data)) {
+          const userData = session.user || session.data;
+          setProfile(prev => ({
+            ...prev,
+            name: userData.name || 'Doctor',
+          }));
+        }
+      } catch (e) {
+        console.log('Session load error:', e);
+      } finally {
+        setIsReady(true);
+      }
+    };
+
+    const fetchProfile = async () => {
+      try {
+        const res = await getDoctorProfile();
+        if (res && (res.data || res.profile)) {
+          const data = res.data || res.profile;
+          const backendName = data.basicInfo?.name;
+          const backendImage = data.basicInfo?.profileImage;
+
+          setProfile(prev => ({
+            name: backendName && backendName.trim() !== '' ? backendName : prev.name,
+            profileImage: backendImage && backendImage.trim() !== '' ? backendImage : prev.profileImage,
+          }));
+        }
+      } catch (error) {
+        console.log('Home profile fetch note:', error);
+      }
+    };
+
+    loadInitialData().then(fetchProfile);
+  }, []);
+
+  if (!isReady) {
+    return null;
+  }
 
   const metrics = [
     { label: 'Total Patients', value: '1.2k', icon: 'account-group', color: theme.accent, trend: '+12%' },
@@ -45,14 +92,20 @@ const DoctorHome: React.FC<DoctorHomeProps> = ({ theme, onLogout, onViewCalendar
       {/* Enhanced Header */}
       <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
         <View style={styles.headerLeft}>
-           <Image
-              source={require('../../../screens/image/logo.png')} 
-              style={styles.avatar}
-           />
-           <View>
-             <Text style={[styles.greeting, { color: theme.textSecondary }]}>Welcome back,</Text>
-             <View style={styles.nameRow}>
-                <Text style={[styles.doctorName, { color: theme.textPrimary }]}>Dr. Aditi Rao</Text>
+            <TouchableOpacity activeOpacity={0.8}>
+               {profile.profileImage && profile.profileImage.trim() !== '' ? (
+                  <Image source={{ uri: profile.profileImage }} style={styles.avatar} />
+               ) : (
+                  <Image 
+                     source={require('../../../screens/image/logo.png')} 
+                     style={[styles.avatar, { backgroundColor: '#FFF' }]} 
+                  />
+               )}
+            </TouchableOpacity>
+            <View>
+              <Text style={[styles.greeting, { color: theme.textSecondary }]}>Welcome back,</Text>
+              <View style={styles.nameRow}>
+                 <Text style={[styles.doctorName, { color: theme.textPrimary }]}>{profile.name}</Text>
                 <Icon name="check-decagram" size={16} color={theme.accent} style={{ marginLeft: 4 }} />
              </View>
            </View>
@@ -198,6 +251,10 @@ const styles = StyleSheet.create({
   doctorName: {
     fontSize: 18,
     fontWeight: '700',
+  },
+  fallbackAvatar: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   iconBtn: {
     padding: 10,

@@ -24,7 +24,7 @@ type LoginScreenProps = {
   onBack?: () => void;
   onSignupPress?: () => void;
   onSuccess?: (role?: 'patient' | 'doctor') => void;
-  onOtpRequest?: (payload: { contact: string; channel: 'sms'; role?: 'doctor' | 'patient'; userId?: string }) => void;
+  onOtpRequest?: (payload: { contact: string; channel: 'sms'; role?: 'doctor' | 'patient'; userId?: string; token?: string }) => void;
   onForgotPress?: () => void;
 };
 
@@ -74,7 +74,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     setLoading(true);
     try {
       // Step 1: Check if user exists in database
-      const response = await checkUserExistence(trimmed);
+      const cleanContact = isPhoneInput ? trimmed.replace(/\D/g, '') : trimmed;
+      const response = await checkUserExistence(cleanContact);
       console.log('User Found Response:', response);
 
       // Verify if the response actually contains user data
@@ -94,10 +95,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
       } else {
         // For phone, proceed to OTP screen
         onOtpRequest?.({ 
-          contact: trimmed, 
+          contact: cleanContact, 
           channel: 'sms', 
           role: role || 'patient',
-          userId: userId // Path the userId forward
+          userId: userId, // Path the userId forward
+          token: response.token // Include the token
         });
         showSnack('User verified. Sending code...');
       }
