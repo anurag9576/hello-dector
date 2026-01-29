@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   BackHandler,
   StatusBar,
   StyleSheet,
   View,
-  useColorScheme,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LoginScreen from '../auth/login';
@@ -12,14 +12,19 @@ import SignupScreen from '../auth/singnup';
 import ForgotPasswordScreen from '../auth/forgotpassword';
 import OTPVerificationScreen from '../auth/otpverification';
 import PatientTabs from '../modules/patient/screens/PatientTabs';
-import { darkTheme, lightTheme, ThemePalette } from '../theme/palette';
+import DoctorTabs from '../modules/doctor/screens/DoctorTabs';
+import { useThemeContext } from '../theme/ThemeContext';
+import { ThemePalette } from '../theme/palette';
+import { getUserSession, clearUserSession, saveUserSession } from '../utils/storage';
 
-type AppScreen = 'login' | 'signup' | 'forgot' | 'otp' | 'home';
+type AppScreen = 'login' | 'signup' | 'forgot' | 'otp' | 'home' | 'doctor_home';
 type OtpPayload = {
   contact: string;
   channel: 'email' | 'sms';
   backScreen: AppScreen;
   successScreen: AppScreen;
+  userId?: string;
+  token?: string;
 };
 type RecoveryPayload = OtpPayload | null;
 type NavigationState = {
@@ -28,13 +33,37 @@ type NavigationState = {
 };
 
 const RootNavigator = () => {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === 'dark' ? darkTheme : lightTheme;
+  const { theme, mode } = useThemeContext();
   const [navState, setNavState] = useState<NavigationState>({
     screen: 'login',
     recoveryPayload: null,
   });
+  const [loading, setLoading] = useState(true);
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const session = await getUserSession();
+        if (session && session.role) {
+          setNavState({
+            screen: session.role === 'doctor' ? 'doctor_home' : 'home',
+            recoveryPayload: null,
+          });
+        }
+      } catch (e) {
+        console.error('Failed to check session:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkSession();
+  }, []);
+
+  const handleLogout = async () => {
+    await clearUserSession();
+    setScreen('login');
+  };
 
   const setScreen = (next: AppScreen, payload?: RecoveryPayload) =>
     setNavState(() => ({
@@ -76,13 +105,15 @@ const RootNavigator = () => {
             theme={palette}
             onSignupPress={() => setScreen('signup')}
             onForgotPress={() => setScreen('forgot')}
-            onSuccess={() => setScreen('home')}
+            onSuccess={(role) => setScreen(role === 'doctor' ? 'doctor_home' : 'home')}
             onOtpRequest={payload =>
               setScreen('otp', {
                 contact: payload.contact,
                 channel: payload.channel,
                 backScreen: 'login',
-                successScreen: 'home',
+                successScreen: payload.role === 'doctor' ? 'doctor_home' : 'home',
+                userId: payload.userId,
+                token: payload.token, // Include token
               })
             }
           />
@@ -92,15 +123,17 @@ const RootNavigator = () => {
           <SignupScreen
             theme={palette}
             onBack={() => setScreen('login')}
-            onOtpRequest={contact =>
+            onOtpRequest={payload =>
               setScreen('otp', {
-                contact,
+                contact: payload.contact,
                 channel: 'sms',
                 backScreen: 'signup',
-                successScreen: 'home',
+                successScreen: payload.role === 'doctor' ? 'doctor_home' : 'home',
+                userId: payload.userId,
+                token: payload.token,
               })
             }
-            onSuccess={() => setScreen('home')}
+            onSuccess={() => setScreen('login')}
           />
         );
       case 'forgot':
@@ -125,27 +158,60 @@ const RootNavigator = () => {
             defaultContact={recoveryPayload?.contact}
             defaultChannel={recoveryPayload?.channel}
             onBack={() => setScreen(recoveryPayload?.backScreen ?? 'login')}
-            onSuccess={() => setScreen(recoveryPayload?.successScreen ?? 'login')}
+            onSuccess={async () => {
+              if (recoveryPayload?.successScreen === 'login') {
+                // If going to login screen, don't auto-login yet
+                setScreen('login');
+              } else {
+                const role = recoveryPayload?.successScreen === 'doctor_home' ? 'doctor' : 'patient';
+                await saveUserSession({
+                  contact: recoveryPayload?.contact,
+                  role,
+                  id: recoveryPayload?.userId,
+                  token: recoveryPayload?.token, // Save the token
+                });
+                setScreen(recoveryPayload?.successScreen ?? 'login');
+              }
+            }}
           />
         );
+      case 'doctor_home':
+        return <DoctorTabs theme={palette} onLogout={handleLogout} />;
       case 'home':
       default:
-        return <PatientTabs theme={palette} onLogout={() => setScreen('login')} />;
+        return <PatientTabs theme={palette} onLogout={handleLogout} />;
     }
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.hero, justifyContent: 'center', alignItems: 'center' }]}>
+        <StatusBar barStyle="light-content" backgroundColor={theme.hero} />
+        <ActivityIndicator size="large" color="#fff" />
+      </View>
+    );
+  }
+
+  const heroScreens: AppScreen[] = ['login', 'signup', 'forgot', 'otp'];
+  const containerColor = heroScreens.includes(screen)
+    ? theme.hero
+    : theme.background;
 
   return (
     <View
       style={[
         styles.container,
         {
-          backgroundColor: theme.background,
+          backgroundColor: containerColor,
           paddingTop: insets.top,
           paddingBottom: insets.bottom,
         },
       ]}
     >
-      <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
+      <StatusBar
+        barStyle={mode === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={containerColor}
+      />
       {renderScreen(theme)}
     </View>
   );

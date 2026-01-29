@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -10,9 +10,12 @@ import {
   TouchableOpacity,
   View,
   ScrollView,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { ThemePalette } from '../theme/palette';
+import { checkUserExistence, loginUser } from '../utils/api';
+import { saveUserSession } from '../utils/storage';
 
 Icon.loadFont();
 
@@ -20,8 +23,8 @@ type LoginScreenProps = {
   theme: ThemePalette;
   onBack?: () => void;
   onSignupPress?: () => void;
-  onSuccess?: () => void;
-  onOtpRequest?: (payload: { contact: string; channel: 'sms' }) => void;
+  onSuccess?: (role?: 'patient' | 'doctor') => void;
+  onOtpRequest?: (payload: { contact: string; channel: 'sms'; role?: 'doctor' | 'patient'; userId?: string; token?: string }) => void;
   onForgotPress?: () => void;
 };
 
@@ -38,9 +41,18 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [snackMessage, setSnackMessage] = useState('');
+  const [snackVisible, setSnackVisible] = useState(false);
+  const [userFound, setUserFound] = useState(false);
+
+  const showSnack = (message: string) => {
+    setSnackMessage(message);
+    setSnackVisible(true);
+  };
 
   const trimmedContact = contact.trim();
-  const showPasswordField = trimmedContact.includes('@');
+  const isEmail = trimmedContact.includes('@');
+  const showPasswordField = isEmail;
 
   const isValidEmail = (value: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -48,35 +60,105 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
   const isValidPhone = (value: string) =>
     /^\d{10}$/.test(value.replace(/\D/g, ''));
 
-  const handleSendOtp = () => {
+  const handleNext = async () => {
     const trimmed = contact.trim();
-    const valid = isValidPhone(trimmed);
+    const isEmailInput = isEmail;
+    const isPhoneInput = isValidPhone(trimmed);
 
-    setContactError(valid ? null : 'Enter valid 10-digit phone number');
-    if (!valid) return;
+    if (!isEmailInput && !isPhoneInput) {
+      setContactError('Enter valid email address or 10-digit phone number');
+      return;
+    }
+    setContactError(null);
 
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      onOtpRequest?.({ contact: trimmed, channel: 'sms' });
-    }, 1000);
+    try {
+      // Step 1: Check if user exists in database
+      const cleanContact = isPhoneInput ? trimmed.replace(/\D/g, '') : trimmed;
+      const response = await checkUserExistence(cleanContact);
+      console.log('User Found Response:', response);
+
+      // Verify if the response actually contains user data
+      // (Backend might return 200 OK with success:false or empty user for unregistered)
+      const role = response.role || response.user?.role || response.data?.user?.role || response.data?.role;
+      const userId = response.id || response.user?.id || response.data?.user?.id || response._id || response.user?._id;
+      const userExists = !!(response.user || response.data?.user || response.role || response.data?.role);
+
+      if (!userExists) {
+        throw new Error('User not registered');
+      }
+
+      if (isEmailInput) {
+        // For email, just unlock the password field
+        setUserFound(true);
+        showSnack('User found. Enter password.');
+      } else {
+        // For phone, proceed to OTP screen
+        onOtpRequest?.({ 
+          contact: cleanContact, 
+          channel: 'sms', 
+          role: role || 'patient',
+          userId: userId, // Path the userId forward
+          token: response.token // Include the token
+        });
+        showSnack('User verified. Sending code...');
+      }
+    } catch (error: any) {
+      console.error('User Check Error:', error.message);
+      
+      const errorMsg = isEmailInput 
+        ? 'Email not registered. Please sign up.' 
+        : 'Phone number not registered.';
+      
+      setContactError(errorMsg);
+      showSnack(errorMsg);
+      
+      // Removed Alert.alert as per user request to show on UI
+    } finally {
+      setTimeout(() => {
+        setLoading(false);
+      }, 1000);
+    }
   };
 
-  const handleEmailLogin = () => {
+  const handleEmailLogin = async () => {
     const trimmed = contact.trim();
-    const isEmail = isValidEmail(trimmed);
     const hasPassword = password.trim().length > 0;
 
-    setContactError(isEmail ? null : 'Enter valid email address');
     setPasswordError(hasPassword ? null : 'Password is required');
-    if (!isEmail || !hasPassword) return;
+    if (!hasPassword) return;
 
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const response = await loginUser({
+        email: trimmed,
+        password: password.trim(),
+      });
       setLoading(false);
-      onSuccess?.();
-    }, 1000);
+      showSnack('Login successful');
+      
+      const role = response.role || response.user?.role || 'patient';
+      
+      // Save session locally
+      await saveUserSession({ ...response, role });
+      
+      setTimeout(() => {
+        setLoading(false);
+        onSuccess?.(role);
+      }, 1000);
+    } catch (error: any) {
+      setTimeout(() => {
+        setLoading(false);
+      }, 1000);
+      Alert.alert('Login Failed', error.message || 'Invalid credentials');
+    }
   };
+
+  useEffect(() => {
+    if (!snackVisible) return;
+    const timer = setTimeout(() => setSnackVisible(false), 2500);
+    return () => clearTimeout(timer);
+  }, [snackVisible]);
 
   return (
     <KeyboardAvoidingView
@@ -133,18 +215,29 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
               placeholder="Enter phone number or email"
               placeholderTextColor={theme.textSecondary}
               value={contact}
-              onChangeText={setContact}
+              onChangeText={(txt) => {
+                setContact(txt);
+                setUserFound(false); // Reset check if contact changes
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
+              editable={true}
             />
           </View>
 
-          <Text style={{ color: contactError ? theme.hero : theme.textSecondary }}>
-            {contactError ??
-              (showPasswordField
-                ? 'Enter your password to continue'
-                : "We'll send you an OTP to verify")}
-          </Text>
+          <View style={styles.infoRow}>
+            {contactError ? (
+              <Icon name="error-outline" size={16} color={theme.hero} />
+            ) : (
+              <Icon name="info-outline" size={16} color={theme.textSecondary} />
+            )}
+            <Text style={[styles.infoText, { color: contactError ? theme.hero : theme.textSecondary }]}>
+              {contactError ??
+                (showPasswordField
+                  ? 'Enter your password to continue'
+                  : "We'll send you an OTP to verify")}
+            </Text>
+          </View>
 
           {showPasswordField && (
             <View
@@ -181,14 +274,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
 
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: theme.hero }]}
-            onPress={showPasswordField ? handleEmailLogin : handleSendOtp}
+            onPress={isEmail ? handleEmailLogin : handleNext}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.primaryText}>
-                {showPasswordField ? 'Login' : 'Send OTP'}
+                {isEmail ? 'Login' : 'Send OTP'}
               </Text>
             )}
           </TouchableOpacity>
@@ -201,6 +294,23 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
           </Text>
         </View>
       </ScrollView>
+
+      {loading && (
+        <View style={styles.loaderOverlay}>
+           <View style={[styles.loaderContent, { backgroundColor: theme.card }]}>
+              <ActivityIndicator size="large" color={theme.hero} />
+              <Text style={[styles.loaderText, { color: theme.textPrimary }]}>
+                {isEmail ? 'Logging in...' : 'Authenticating...'}
+              </Text>
+           </View>
+        </View>
+      )}
+
+      {snackVisible && (
+        <View style={styles.snackbar}>
+          <Text style={styles.snackbarText}>{snackMessage}</Text>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 };
@@ -208,12 +318,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    position: 'relative',
   },
   content: {
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 10,
     gap: 24,
   },
   brandBadge: {
@@ -296,6 +407,55 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     color: '#007BFF',
     fontWeight: '600',
+  },
+  snackbar: {
+    position: 'absolute',
+    top: 24,
+    left: 16,
+    right: 16,
+    backgroundColor: 'rgba(239, 68, 68, 0.95)', // Reddish for error visibility
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    alignItems: 'center',
+    zIndex: 1000,
+    elevation: 20,
+  },
+  snackbarText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  infoText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  loaderOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 99999,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loaderContent: {
+    padding: 30,
+    borderRadius: 24,
+    alignItems: 'center',
+    gap: 16,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+  },
+  loaderText: {
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 

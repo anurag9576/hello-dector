@@ -10,10 +10,13 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { ThemePalette } from '../theme/palette';
+import { registerUser } from '../utils/api';
 
 
 type Role = 'patient' | 'doctor';
@@ -21,8 +24,8 @@ type Role = 'patient' | 'doctor';
 type SignupScreenProps = {
   theme: ThemePalette;
   onBack?: () => void;
-  onOtpRequest?: (contact: string) => void;
-  onSuccess?: () => void;
+  onOtpRequest?: (payload: { contact: string; role: Role; userId?: string; token?: string }) => void;
+  onSuccess?: (role: Role) => void;
 };
 
 const SignupScreen: React.FC<SignupScreenProps> = ({
@@ -40,6 +43,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({
   const [password, setPassword] = useState('');
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const isPatient = role === 'patient';
   const isDoctor = role === 'doctor';
@@ -91,7 +95,7 @@ const SignupScreen: React.FC<SignupScreenProps> = ({
     }
   };
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     if (!phoneValid) {
       setPhoneError('Enter 10-digit number');
     }
@@ -99,22 +103,50 @@ const SignupScreen: React.FC<SignupScreenProps> = ({
       setEmailError('Enter valid email address');
     }
     if (!isValid) return;
-    const contact = phone.trim();
-    if (contact) {
-      onOtpRequest?.(contact);
-    } else {
-      onSuccess?.();
+
+    setLoading(true);
+    try {
+      const payload = {
+        name,
+        phone,
+        email,
+        password,
+        role,
+        ...(isDoctor ? { department } : { dob, age }),
+      };
+
+      const response = await registerUser(payload);
+      
+      console.log('Registration success:', response);
+      
+      const contact = phone.trim();
+      const userId = response.id || response.user?.id || response._id || response.user?._id || response.user?._id;
+      const token = response.token;
+      
+      setTimeout(() => {
+        if (contact) {
+          onOtpRequest?.({ contact, role, userId, token });
+        } else {
+          onSuccess?.(role);
+        }
+      }, 1000);
+    } catch (error: any) {
+      Alert.alert('Registration Failed', error.message || 'Unable to register. Please try again.');
+    } finally {
+      setTimeout(() => {
+        setLoading(false);
+      }, 1000);
     }
   };
 
   return (
     <KeyboardAvoidingView
-      style={styles.root}
+      style={[styles.root, { backgroundColor: theme.hero }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
     >
       <ScrollView
-        style={styles.scrollView}
+        style={[styles.scrollView, { backgroundColor: theme.hero }]}
         contentContainerStyle={styles.scrollContainer}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -248,10 +280,14 @@ const SignupScreen: React.FC<SignupScreenProps> = ({
               styles.primaryButton,
               { opacity: isValid ? 1 : 0.6 },
             ]}
-            disabled={!isValid}
+            disabled={!isValid || loading}
             onPress={handleSignup}
           >
-            <Text style={styles.primaryText}>Continue</Text>
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.primaryText}>Continue</Text>
+            )}
           </TouchableOpacity>
 
           <Text style={styles.footerText}>
@@ -262,6 +298,15 @@ const SignupScreen: React.FC<SignupScreenProps> = ({
           </Text>
         </View>
       </ScrollView>
+
+      {loading && (
+        <View style={styles.loaderOverlay}>
+           <View style={[styles.loaderContent, { backgroundColor: '#FFFFFF' }]}>
+              <ActivityIndicator size="large" color="#2A6EF4" />
+              <Text style={styles.loaderText}>Creating Account...</Text>
+           </View>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 };
@@ -309,7 +354,9 @@ const styles = StyleSheet.create({
     borderRadius: 50,
   },
   scrollContainer: {
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 60, // Added more bottom padding for better visibility
   },
   heroSection: {
     alignItems: 'center',
@@ -341,13 +388,16 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 26,
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 32, // More padding inside the card at the bottom
     gap: 20,
     shadowColor: '#000000',
     shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 6 },
     shadowRadius: 12,
     elevation: 8,
+    marginBottom: 20, // Space from the bottom of the scroll view
   },
   sectionTitle: {
     fontSize: 20,
@@ -443,6 +493,29 @@ const styles = StyleSheet.create({
   loginText: {
     color: '#2A6EF4',
     fontWeight: '600',
+  },
+  loaderOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 99999,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loaderContent: {
+    padding: 30,
+    borderRadius: 24,
+    alignItems: 'center',
+    gap: 16,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+  },
+  loaderText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1B2A4E',
   },
 });
 
