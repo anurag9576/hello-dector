@@ -6,9 +6,10 @@ import { ThemePalette } from '../../../theme/palette';
 type DoctorCardProps = {
   doctor: Doctor;
   theme: ThemePalette;
+  onBook?: (doctor: Doctor) => void;
 };
 
-const DoctorCard: React.FC<DoctorCardProps> = ({ doctor, theme }) => {
+const DoctorCard: React.FC<DoctorCardProps> = ({ doctor, theme, onBook }) => {
   return (
     <View
       style={[
@@ -31,9 +32,10 @@ const DoctorCard: React.FC<DoctorCardProps> = ({ doctor, theme }) => {
         </Text>
       </View>
       <TouchableOpacity
-        style={[styles.button, { backgroundColor: theme.softAccent }]}
+        style={[styles.button, { backgroundColor: theme.accent }]}
+        onPress={() => onBook?.(doctor)}
       >
-        <Text style={[styles.buttonText, { color: theme.hero }]}>Book</Text>
+        <Text style={[styles.buttonText, { color: '#fff' }]}>Book</Text>
       </TouchableOpacity>
     </View>
   );

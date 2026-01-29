@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 
 import {
   ScrollView,
@@ -12,23 +12,33 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import { ThemePalette } from '../../../theme/palette';
 import { useThemeContext } from '../../../theme/ThemeContext';
-import { doctors } from '../../../data/doctors';
+import { doctors, Doctor } from '../../../data/doctors';
 import { quickActions } from '../data';
 import QuickActions from '../components/QuickActions';
 import DoctorCard from '../components/DoctorCard';
+import BookingForm, { BookingFormData } from '../components/BookingForm';
 import { patientMeta } from './user_profile_data';
 
 Icon.loadFont();
 
 type PatientHomeProps = {
   theme: ThemePalette;
+  onSeeAllDoctors?: () => void;
+  onSeeAllSpecialties?: () => void;
+  onSeeAllAppointments?: () => void;
+  onOpenChat?: () => void;
 };
 
-const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
+const PatientHome: React.FC<PatientHomeProps> = ({ theme, onSeeAllDoctors, onSeeAllSpecialties, onSeeAllAppointments, onOpenChat }) => {
   const { mode } = useThemeContext();
+  const topDoctorsRef = useRef<View>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSpecialty, setActiveSpecialty] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
+  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
+  const [showBookingForm, setShowBookingForm] = useState(false);
+  const [topDocsY, setTopDocsY] = useState(0);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -177,8 +187,30 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
     setActiveSpecialty(prev => (prev === query ? null : query));
   };
 
+  const handleBookAppointment = (doctor: Doctor) => {
+    setSelectedDoctor(doctor);
+    setShowBookingForm(true);
+  };
+
+  const handleFormSubmit = (formData: BookingFormData) => {
+    if (selectedDoctor) {
+      console.log('Booking appointment with:', selectedDoctor.name, formData);
+      setShowBookingForm(false);
+      setSelectedDoctor(null);
+    }
+  };
+
+  const handleQuickAction = (title: string) => {
+    if (title === 'Book Appointment') {
+       scrollViewRef.current?.scrollTo({ y: topDocsY, animated: true });
+    } else if (title.includes('Talk to a Doctor')) {
+      onOpenChat?.();
+    }
+  };
+
   return (
     <ScrollView
+      ref={scrollViewRef}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
@@ -187,7 +219,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
           <View style={styles.greetingEyebrowRow}>
             <Icon
               name={greetingDescriptor.icon}
-              size={18}
+              size={16}
               color={greetingDescriptor.iconColor}
               style={styles.greetingEyebrowIcon}
             />
@@ -218,32 +250,6 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
         </View>
       </View>
 
-      <View style={styles.highlightRow}>
-        {wellnessHighlights.map(item => (
-          <View
-            key={item.label}
-            style={[styles.highlightCard, { backgroundColor: item.background }]}
-          >
-            <View style={styles.highlightIcon}>
-              <Icon
-                name={item.icon}
-                size={22}
-                color={item.iconColor ?? theme.textPrimary}
-              />
-            </View>
-            <Text style={[styles.highlightLabel, { color: theme.textSecondary }]}>
-              {item.label}
-            </Text>
-            <Text style={[styles.highlightValue, { color: theme.textPrimary }]}>
-              {item.value}
-            </Text>
-            <Text style={[styles.highlightStatus, { color: theme.accent }]}>
-              {item.status}
-            </Text>
-          </View>
-        ))}
-      </View>
-
       <View
         style={[
           styles.searchBar,
@@ -253,7 +259,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
           },
         ]}
       >
-        <Icon name="magnify" size={20} color={theme.textSecondary} />
+        <Icon name="magnify" size={22} color={theme.textSecondary} />
         <TextInput
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -264,15 +270,38 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
       </View>
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}>
+         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
-            Health metrics
-          </Text>
-          <Text style={[styles.sectionLink, { color: theme.accent }]}>
-            Insights
+            Overview
           </Text>
         </View>
         <View style={styles.metricsGrid}>
+          {wellnessHighlights.map(item => (
+            <View
+              key={item.label}
+              style={[
+                styles.metricCard,
+                { backgroundColor: item.background },
+              ]}
+            >
+              <View style={styles.metricHeaderRow}>
+                <Icon
+                  name={item.icon}
+                  size={22}
+                  color={item.iconColor ?? theme.textPrimary}
+                />
+                 <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>
+                  {item.label}
+                </Text>
+              </View>
+              <Text style={[styles.metricValue, { color: theme.textPrimary }]}>
+                {item.value}
+              </Text>
+              <Text style={[styles.metricStatus, { color: theme.accent }]}>
+                {item.status}
+              </Text>
+            </View>
+          ))}
           {healthMetrics.map(metric => (
             <View
               key={metric.label}
@@ -281,15 +310,16 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
                 { backgroundColor: metric.background },
               ]}
             >
-              <Icon
-                name={metric.icon}
-                size={24}
-                color={metric.iconColor}
-                style={styles.metricIcon}
-              />
-              <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>
-                {metric.label}
-              </Text>
+              <View style={styles.metricHeaderRow}>
+                <Icon
+                  name={metric.icon}
+                  size={22}
+                  color={metric.iconColor}
+                />
+                <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>
+                  {metric.label}
+                </Text>
+              </View>
               <Text style={[styles.metricValue, { color: metric.accent }]}>
                 {metric.value}
               </Text>
@@ -305,7 +335,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
         <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
           Quick actions
         </Text>
-        <QuickActions theme={theme} actions={quickActions} />
+        <QuickActions theme={theme} actions={quickActions} onActionPress={handleQuickAction}/>
       </View>
 
       <View style={styles.section}>
@@ -313,7 +343,9 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
           <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
             Upcoming appointment
           </Text>
-          <Text style={[styles.sectionLink, { color: theme.accent }]}>See all</Text>
+          <TouchableOpacity onPress={onSeeAllAppointments}>
+            <Text style={[styles.sectionLink, { color: theme.accent }]}>See all</Text>
+          </TouchableOpacity>
         </View>
         <View style={[styles.appointmentCard, { backgroundColor: theme.card }]}>
           <Icon
@@ -365,7 +397,9 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
           <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
             Specialties
           </Text>
-          <Text style={[styles.sectionLink, { color: theme.accent }]}>See all</Text>
+          <TouchableOpacity onPress={onSeeAllSpecialties}>
+            <Text style={[styles.sectionLink, { color: theme.accent }]}>See all</Text>
+          </TouchableOpacity>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.specialtyRow}>
@@ -407,16 +441,25 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
         </ScrollView>
       </View>
 
-      <View style={styles.section}>
+      <View
+        style={styles.section}
+        onLayout={(event) => {
+          const layout = event.nativeEvent.layout;
+          setTopDocsY(layout.y);
+        }}
+        ref={topDoctorsRef}
+      >
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
             Top doctors
           </Text>
-          <Text style={[styles.sectionLink, { color: theme.accent }]}>See all</Text>
+          <TouchableOpacity onPress={onSeeAllDoctors}>
+            <Text style={[styles.sectionLink, { color: theme.accent }]}>See all</Text>
+          </TouchableOpacity>
         </View>
         {filteredDoctors.length ? (
           filteredDoctors.map(doctor => (
-            <DoctorCard key={doctor.name} doctor={doctor} theme={theme} />
+            <DoctorCard key={doctor.name} doctor={doctor} theme={theme} onBook={handleBookAppointment} />
           ))
         ) : (
           <View style={[styles.emptyState, { borderColor: theme.border }]}>
@@ -424,180 +467,236 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme }) => {
               No doctors found
             </Text>
             <Text
-              style={[styles.emptyStateSubtitle, { color: theme.textSecondary }]}
-            >
+              style={[styles.emptyStateSubtitle, { color: theme.textSecondary }]}>
               Try another name or specialty.
             </Text>
           </View>
         )}
       </View>
+
+      {selectedDoctor && (
+        <BookingForm
+          visible={showBookingForm}
+          doctor={selectedDoctor}
+          theme={theme}
+          onClose={() => setShowBookingForm(false)}
+          onBookAppointment={handleFormSubmit}
+        />
+      )}
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
     paddingBottom: 48,
     gap: 28,
   },
   greetingCard: {
-    borderRadius: 28,
+    borderRadius: 32,
     padding: 24,
+    paddingVertical: 28,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    elevation: 8,
+    overflow: 'hidden',
   },
   greetingCopy: {
-    gap: 6,
+    gap: 8,
+    flex: 1,
+    paddingRight: 16,
   },
   greetingEyebrowRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   greetingEyebrowIcon: {
-    marginTop: -2,
+    marginTop: -1,
   },
   greetingEyebrow: {
     color: '#D9E9FF',
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    fontSize: 13,
+    letterSpacing: 1.2,
+    fontSize: 11,
+    fontWeight: '700',
   },
   greetingTitle: {
     color: '#FFFFFF',
-    fontSize: 26,
-    fontWeight: '700',
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginTop: 4,
   },
   greetingSubtitle: {
     color: '#E7F5FF',
-    fontSize: 14,
+    fontSize: 15,
+    opacity: 0.9,
+    lineHeight: 22,
   },
   greetingBadge: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 48,
+    height: 48,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   greetingBadgeText: {
     fontSize: 22,
   },
   highlightRow: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 12,
   },
   highlightCard: {
     flex: 1,
     borderRadius: 24,
-    padding: 18,
-    gap: 6,
+    padding: 20,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.03)',
   },
   highlightIcon: {
     alignSelf: 'flex-start',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   highlightIconText: {
     fontSize: 18,
   },
   highlightLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    opacity: 0.7,
   },
   highlightValue: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   highlightStatus: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   searchBar: {
-    borderRadius: 22,
+    borderRadius: 20,
     borderWidth: 1,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
   },
   searchIcon: {
-    fontSize: 18,
+    fontSize: 20,
   },
   voiceIcon: {
-    fontSize: 18,
+    fontSize: 20,
   },
   searchInput: {
     flex: 1,
     marginHorizontal: 12,
-    fontSize: 15,
+    fontSize: 16,
+    fontWeight: '500',
   },
   section: {
-    gap: 16,
+    gap: 20,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 4,
+    paddingHorizontal: 4,
   },
   sectionLink: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   appointmentCard: {
-    borderRadius: 28,
-    padding: 22,
+    borderRadius: 32,
+    padding: 24,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 18,
-    shadowColor: '#000000',
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 5,
+    alignItems: 'flex-start', // Changed aligned so badge can be top
+    gap: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 6,
     position: 'relative',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.03)',
   },
   videoCallIcon: {
     position: 'absolute',
-    top: 2,
-    right: 20,
-    backgroundColor: '#F4FFF8',
-    padding: 8,
-    borderRadius: 16,
+    top: 24,
+    right: 24,
+    backgroundColor: '#F0FDF4',
+    padding: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
   },
   appointmentBadge: {
     borderRadius: 20,
+    width: 72,
     paddingVertical: 16,
-    paddingHorizontal: 14,
     alignItems: 'center',
-    gap: 4,
-    alignSelf: 'flex-start',
-    marginTop: -10,
-    marginRight: 8,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   appointmentBadgeIcon: {
-    marginBottom: 6,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    marginBottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     padding: 6,
-    borderRadius: 12,
+    borderRadius: 10,
   },
   appointmentBadgeText: {
     color: '#FFFFFF',
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
   },
   appointmentBadgeSub: {
     color: '#FFFFFF',
@@ -605,36 +704,49 @@ const styles = StyleSheet.create({
   },
   appointmentInfo: {
     flex: 1,
-    gap: 8,
+    gap: 6,
+    paddingTop: 4,
   },
   appointmentDoctor: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 19,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
   appointmentDetails: {
     fontSize: 14,
+    fontWeight: '500',
+    marginTop: 2,
+    marginBottom: 12,
+    opacity: 0.8,
   },
   appointmentActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   joinButton: {
     paddingVertical: 10,
-    paddingHorizontal: 22,
-    borderRadius: 16,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   joinButtonText: {
     fontWeight: '700',
     fontSize: 14,
+    letterSpacing: 0.2,
   },
   outlinedButton: {
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingVertical: 9,
+    paddingHorizontal: 18,
   },
   outlinedButtonText: {
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 14,
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -644,60 +756,88 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     width: '48%',
-    borderRadius: 22,
-    padding: 16,
-    gap: 6,
+    borderRadius: 26,
+    padding: 18,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.03)',
+    justifyContent: 'space-between',
+    minHeight: 140,
+  },
+  metricHeaderRow: {
+    gap: 8,
+    alignItems: 'flex-start',
   },
   metricIcon: {
     fontSize: 22,
+    marginBottom: 0,
   },
   metricLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    opacity: 0.6,
   },
   metricValue: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   metricStatus: {
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: '600',
   },
   specialtyRow: {
     flexDirection: 'row',
     gap: 12,
-    paddingVertical: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
   },
   specialtyPill: {
-    borderRadius: 24,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   specialtyPillActive: {
     borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   specialtyIcon: {
     fontSize: 18,
   },
   specialtyTitle: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   emptyState: {
     borderWidth: 1,
-    borderRadius: 22,
-    padding: 24,
+    borderStyle: 'dashed',
+    borderRadius: 24,
+    padding: 32,
     alignItems: 'center',
-    gap: 6,
+    gap: 10,
+    backgroundColor: 'rgba(0,0,0,0.01)',
   },
   emptyStateTitle: {
     fontSize: 18,
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
   emptyStateSubtitle: {
-    fontSize: 14,
+    fontSize: 15,
+    textAlign: 'center',
+    opacity: 0.7,
   },
 });
 
