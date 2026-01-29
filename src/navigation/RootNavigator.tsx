@@ -113,7 +113,7 @@ const RootNavigator = () => {
                 backScreen: 'login',
                 successScreen: payload.role === 'doctor' ? 'doctor_home' : 'home',
                 userId: payload.userId,
-                token: (payload as any).token, // Include token
+                token: payload.token, // Include token
               })
             }
           />
@@ -130,6 +130,7 @@ const RootNavigator = () => {
                 backScreen: 'signup',
                 successScreen: payload.role === 'doctor' ? 'doctor_home' : 'home',
                 userId: payload.userId,
+                token: payload.token,
               })
             }
             onSuccess={() => setScreen('login')}

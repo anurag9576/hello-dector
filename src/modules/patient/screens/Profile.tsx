@@ -11,6 +11,8 @@ import {
   Modal,
   Pressable,
   Platform,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import DateTimePicker, {
@@ -293,10 +295,14 @@ const Profile: React.FC<ProfileProps> = ({ theme, onBack }) => {
         ),
       );
       handleEditCancel();
+      Alert.alert('Success', 'Profile updated successfully');
     } catch (err: any) {
       console.error('Failed to save field:', err);
+      Alert.alert('Error', 'Failed to update field');
     } finally {
-      setLoading(false);
+      setTimeout(() => {
+        setLoading(false);
+      }, 1000);
     }
   };
 
@@ -397,11 +403,14 @@ const Profile: React.FC<ProfileProps> = ({ theme, onBack }) => {
         ),
       );
       cancelSectionEdit();
+      Alert.alert('Success', 'Profile section updated successfully');
     } catch (err: any) {
       console.error('Failed to save section:', err);
-      // Removed Alert import to avoid more lint errors, using console and local error handle
+      Alert.alert('Error', 'Failed to update section');
     } finally {
-      setLoading(false);
+      setTimeout(() => {
+        setLoading(false);
+      }, 1000);
     }
   };
 
@@ -411,16 +420,25 @@ const Profile: React.FC<ProfileProps> = ({ theme, onBack }) => {
       [rowKey]: value,
     }));
 
-  if (loading) {
+  if (loading && !editingKey && !editingSectionKey) {
     return (
       <View style={[styles.container, styles.loadingCenter, { backgroundColor: theme.background }]}>
-        <Text style={{ color: theme.textSecondary }}>Loading Profile...</Text>
+        <ActivityIndicator size="large" color={theme.accent} />
+        <Text style={{ color: theme.textSecondary, marginTop: 12 }}>Loading Profile...</Text>
       </View>
     );
   }
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      {loading && (editingKey || editingSectionKey) && (
+        <View style={styles.loaderOverlay}>
+           <View style={[styles.loaderContent, { backgroundColor: theme.card }]}>
+              <ActivityIndicator size="large" color={theme.accent} />
+              <Text style={[styles.loaderText, { color: theme.textPrimary }]}>Updating Profile...</Text>
+           </View>
+        </View>
+      )}
       <View
         style={[
           styles.navBar,
@@ -1365,6 +1383,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1F2937',
     letterSpacing: -0.2,
+  },
+  loaderOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 9999,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loaderContent: {
+    padding: 30,
+    borderRadius: 24,
+    alignItems: 'center',
+    gap: 16,
+  },
+  loaderText: {
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 

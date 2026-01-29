@@ -115,7 +115,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
       
       // Removed Alert.alert as per user request to show on UI
     } finally {
-      setLoading(false);
+      setTimeout(() => {
+        setLoading(false);
+      }, 1000);
     }
   };
 
@@ -140,9 +142,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
       // Save session locally
       await saveUserSession({ ...response, role });
       
-      onSuccess?.(role);
+      setTimeout(() => {
+        setLoading(false);
+        onSuccess?.(role);
+      }, 1000);
     } catch (error: any) {
-      setLoading(false);
+      setTimeout(() => {
+        setLoading(false);
+      }, 1000);
       Alert.alert('Login Failed', error.message || 'Invalid credentials');
     }
   };
@@ -287,6 +294,18 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
           </Text>
         </View>
       </ScrollView>
+
+      {loading && (
+        <View style={styles.loaderOverlay}>
+           <View style={[styles.loaderContent, { backgroundColor: theme.card }]}>
+              <ActivityIndicator size="large" color={theme.hero} />
+              <Text style={[styles.loaderText, { color: theme.textPrimary }]}>
+                {isEmail ? 'Logging in...' : 'Authenticating...'}
+              </Text>
+           </View>
+        </View>
+      )}
+
       {snackVisible && (
         <View style={styles.snackbar}>
           <Text style={styles.snackbarText}>{snackMessage}</Text>
@@ -415,6 +434,28 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 13,
     fontWeight: '500',
+  },
+  loaderOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 99999,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loaderContent: {
+    padding: 30,
+    borderRadius: 24,
+    alignItems: 'center',
+    gap: 16,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+  },
+  loaderText: {
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 

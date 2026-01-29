@@ -24,7 +24,7 @@ type Role = 'patient' | 'doctor';
 type SignupScreenProps = {
   theme: ThemePalette;
   onBack?: () => void;
-  onOtpRequest?: (payload: { contact: string; role: Role; userId?: string }) => void;
+  onOtpRequest?: (payload: { contact: string; role: Role; userId?: string; token?: string }) => void;
   onSuccess?: (role: Role) => void;
 };
 
@@ -121,16 +121,21 @@ const SignupScreen: React.FC<SignupScreenProps> = ({
       
       const contact = phone.trim();
       const userId = response.id || response.user?.id || response._id || response.user?._id || response.user?._id;
-      if (contact) {
-        // Use frontend-only flow for OTP
-        onOtpRequest?.({ contact, role, userId });
-      } else {
-        onSuccess?.(role);
-      }
+      const token = response.token;
+      
+      setTimeout(() => {
+        if (contact) {
+          onOtpRequest?.({ contact, role, userId, token });
+        } else {
+          onSuccess?.(role);
+        }
+      }, 1000);
     } catch (error: any) {
       Alert.alert('Registration Failed', error.message || 'Unable to register. Please try again.');
     } finally {
-      setLoading(false);
+      setTimeout(() => {
+        setLoading(false);
+      }, 1000);
     }
   };
 
@@ -293,6 +298,15 @@ const SignupScreen: React.FC<SignupScreenProps> = ({
           </Text>
         </View>
       </ScrollView>
+
+      {loading && (
+        <View style={styles.loaderOverlay}>
+           <View style={[styles.loaderContent, { backgroundColor: '#FFFFFF' }]}>
+              <ActivityIndicator size="large" color="#2A6EF4" />
+              <Text style={styles.loaderText}>Creating Account...</Text>
+           </View>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 };
@@ -479,6 +493,29 @@ const styles = StyleSheet.create({
   loginText: {
     color: '#2A6EF4',
     fontWeight: '600',
+  },
+  loaderOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 99999,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loaderContent: {
+    padding: 30,
+    borderRadius: 24,
+    alignItems: 'center',
+    gap: 16,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+  },
+  loaderText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1B2A4E',
   },
 });
 

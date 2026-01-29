@@ -43,16 +43,16 @@ const DoctorProfile: React.FC<DoctorProfileProps> = ({ theme, onLogout, onBack }
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDegreePicker, setShowDegreePicker] = useState(false);
   const [profile, setProfile] = useState({
-    name: 'Dr. Aditi Rao',
-    specialty: 'Senior Cardiologist',
-    experience: '12 Years Experience',
-    degree: 'MBBS, MD',
-    clinic: 'HelloDoctor Clinic, Pune',
-    about: 'I am a passionate cardiologist dedicated to providing the best heart care services with a focus on preventive measures and patient education.',
-    languages: 'English, Hindi, Marathi',
-    onlineFees: '800',
-    clinicFees: '1200',
-    services: 'Heart Failure Management, Angioplasty, Preventive Cardiology',
+    name: '',
+    specialty: '',
+    experience: '',
+    degree: '',
+    clinic: '',
+    about: '',
+    languages: '',
+    onlineFees: '',
+    clinicFees: '',
+    services: '',
     phone: '',
     profileImage: '',
   });
@@ -75,18 +75,18 @@ const DoctorProfile: React.FC<DoctorProfileProps> = ({ theme, onLogout, onBack }
       if (res && (res.data || res.profile)) {
         const data = res.data || res.profile;
         const mappedProfile = {
-          name: data.basicInfo?.name || profile.name,
-          specialty: data.basicInfo?.specialty || profile.specialty,
-          experience: data.basicInfo?.experience || profile.experience,
-          degree: data.basicInfo?.degree || profile.degree,
-          clinic: data.basicInfo?.clinic || profile.clinic,
-          about: data.patientCentricDetails?.about || profile.about,
-          languages: data.patientCentricDetails?.languages || profile.languages,
-          onlineFees: data.consultationFees?.online || profile.onlineFees,
-          clinicFees: data.consultationFees?.clinic || profile.clinicFees,
+          name: data.basicInfo?.name || '',
+          specialty: data.basicInfo?.specialty || '',
+          experience: data.basicInfo?.experience || '',
+          degree: data.basicInfo?.degree || '',
+          clinic: data.basicInfo?.clinic || '',
+          about: data.patientCentricDetails?.about || '',
+          languages: data.patientCentricDetails?.languages || '',
+          onlineFees: data.consultationFees?.online || '',
+          clinicFees: data.consultationFees?.clinic || '',
           services: Array.isArray(data.patientCentricDetails?.services) 
             ? data.patientCentricDetails.services.join(', ') 
-            : profile.services,
+            : '',
           phone: data.userId?.phone || '',
           profileImage: data.basicInfo?.profileImage || '',
         };
@@ -198,11 +198,15 @@ const DoctorProfile: React.FC<DoctorProfileProps> = ({ theme, onLogout, onBack }
       setProfile(updatedProfile);
       setEditForm(updatedProfile);
       setShowEditModal(false);
-      Alert.alert('Success', 'Profile updated successfully');
+      setTimeout(() => {
+        Alert.alert('Success', 'Profile updated successfully');
+      }, 500);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to update profile');
     } finally {
-      setLoading(false);
+      setTimeout(() => {
+        setLoading(false);
+      }, 1000);
     }
   };
 
@@ -263,8 +267,16 @@ const DoctorProfile: React.FC<DoctorProfileProps> = ({ theme, onLogout, onBack }
           <Icon name="arrow-left" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.navTitle, { color: theme.textPrimary }]}>Doctor Profile</Text>
-       
       </View>
+
+      {loading && (
+        <View style={styles.loaderOverlay}>
+           <View style={[styles.loaderContent, { backgroundColor: theme.card }]}>
+              <ActivityIndicator size="large" color={theme.accent} />
+              <Text style={[styles.loaderText, { color: theme.textPrimary }]}>Updating Profile...</Text>
+           </View>
+        </View>
+      )}
 
       <ScrollView 
           contentContainerStyle={styles.container} 
@@ -1063,6 +1075,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.05)',
+  },
+  loaderOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 99999,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loaderContent: {
+    padding: 30,
+    borderRadius: 24,
+    alignItems: 'center',
+    gap: 16,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+  },
+  loaderText: {
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 

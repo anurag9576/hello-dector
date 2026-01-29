@@ -56,8 +56,10 @@ const OTPVerificationScreen: React.FC<OTPVerificationProps> = ({
     setTimeout(() => {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       setMockOtp(otp);
-      setSending(false);
-      setStatus(`Code sent to ${contact || 'your contact'}`);
+      setTimeout(() => {
+        setSending(false);
+        setStatus(`Code sent to ${contact || 'your contact'}`);
+      }, 1000);
     }, 800);
   };
 
@@ -93,11 +95,16 @@ const OTPVerificationScreen: React.FC<OTPVerificationProps> = ({
     setTimeout(() => {
       if (otpValue === mockOtp) {
         setOtpError(null);
-        onSuccess?.();
+        setTimeout(() => {
+          setVerifying(false);
+          onSuccess?.();
+        }, 1000);
       } else {
-        setOtpError('Incorrect code. Please try again.');
+        setTimeout(() => {
+          setVerifying(false);
+          setOtpError('Incorrect code. Please try again.');
+        }, 1000);
       }
-      setVerifying(false);
     }, 600);
   };
 
@@ -205,6 +212,17 @@ const OTPVerificationScreen: React.FC<OTPVerificationProps> = ({
           </TouchableOpacity>
         </View>
       </View>
+
+      {(verifying || sending) && (
+        <View style={styles.loaderOverlay}>
+           <View style={[styles.loaderContent, { backgroundColor: theme.card }]}>
+              <ActivityIndicator size="large" color={theme.hero} />
+              <Text style={[styles.loaderText, { color: theme.textPrimary }]}>
+                {verifying ? 'Verifying Code...' : 'Sending Code...'}
+              </Text>
+           </View>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 };
@@ -345,6 +363,28 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     color: 'rgba(255,255,255,0.9)',
+  },
+  loaderOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 99999,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loaderContent: {
+    padding: 30,
+    borderRadius: 24,
+    alignItems: 'center',
+    gap: 16,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+  },
+  loaderText: {
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 
