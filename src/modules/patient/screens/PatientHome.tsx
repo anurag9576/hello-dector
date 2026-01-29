@@ -12,13 +12,14 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import { ThemePalette } from '../../../theme/palette';
 import { useThemeContext } from '../../../theme/ThemeContext';
-import { doctors, Doctor } from '../../../data/doctors';
+import { doctors as initialDoctors, Doctor } from '../../../data/doctors';
 import { quickActions } from '../data';
 import QuickActions from '../components/QuickActions';
 import DoctorCard from '../components/DoctorCard';
 import BookingForm, { BookingFormData } from '../components/BookingForm';
 import { usePatientProfile } from '../hooks/usePatientProfile';
 import { useLiveWeather } from '../hooks/useLiveWeather';
+import { getAllDoctors } from '../../../utils/api';
 
 Icon.loadFont();
 
@@ -42,6 +43,39 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme, onSeeAllDoctors, onSee
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [topDocsY, setTopDocsY] = useState(0);
+  const [backendDoctors, setBackendDoctors] = useState<Doctor[]>([]);
+  const [loadingDoctors, setLoadingDoctors] = useState(true);
+
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      try {
+        const res = await getAllDoctors();
+        if (res && res.success && res.profiles) {
+          const mappedDoctors: Doctor[] = res.profiles.map((p: any) => {
+            const clinic = p.basicInfo?.clinic || '';
+            const city = clinic.includes(',') ? clinic.split(',').pop()?.trim() : clinic;
+            return {
+              name: p.basicInfo?.name || 'Unknown Doctor',
+              specialty: p.basicInfo?.specialty || 'General',
+              experience: p.basicInfo?.experience || 'N/A',
+              rating: p.publicStats?.averageRating?.toString() || '0',
+              availability: 'Available Soon',
+              city: city || 'Pune',
+              phone: p.userId?.phone || p.basicInfo?.phone || '',
+            };
+          });
+          setBackendDoctors(mappedDoctors);
+        }
+      } catch (error) {
+        console.log('Error fetching doctors:', error);
+      } finally {
+        setLoadingDoctors(false);
+      }
+    };
+    fetchDoctors();
+  }, []);
+
+  const displayDoctors = backendDoctors.length > 0 ? backendDoctors : initialDoctors;
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -94,7 +128,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme, onSeeAllDoctors, onSee
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const filteredDoctors = useMemo(() => {
-    return doctors.filter(doctor => {
+    return displayDoctors.filter((doctor: Doctor) => {
       const matchesSearch =
         !normalizedSearch ||
         doctor.name.toLowerCase().includes(normalizedSearch) ||
@@ -106,7 +140,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme, onSeeAllDoctors, onSee
 
       return matchesSearch && matchesSpecialty;
     });
-  }, [normalizedSearch, activeSpecialty]);
+  }, [normalizedSearch, activeSpecialty, displayDoctors]);
 
   const wellnessHighlights = [
     {
@@ -463,7 +497,7 @@ const PatientHome: React.FC<PatientHomeProps> = ({ theme, onSeeAllDoctors, onSee
           </TouchableOpacity>
         </View>
         {filteredDoctors.length ? (
-          filteredDoctors.slice(0, 3).map(doctor => (
+          filteredDoctors.slice(0, 3).map((doctor: Doctor) => (
             <DoctorCard key={doctor.name} doctor={doctor} theme={theme} onBook={handleBookAppointment} />
           ))
         ) : (

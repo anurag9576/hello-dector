@@ -4,6 +4,8 @@ export type Doctor = {
   experience: string;
   rating: string;
   availability: string;
+  city?: string;
+  phone?: string;
 };
 
 export const doctors: Doctor[] = [

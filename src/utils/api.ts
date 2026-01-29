@@ -80,4 +80,5 @@ export const updatePatientProfile = (profileData: any) => apiCall('patient/updat
 export const getDoctorProfile = () => apiCall('doctor/get-profile', 'GET');
 export const saveDoctorProfile = (profileData: any) => apiCall('doctor/save-profile', 'POST', profileData);
 export const updateDoctorProfile = (profileData: any) => apiCall('doctor/update-profile', 'POST', profileData);
+export const getAllDoctors = () => apiCall('doctor/all-profiles', 'GET');
 

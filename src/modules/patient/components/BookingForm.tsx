@@ -522,6 +522,20 @@ const BookingForm: React.FC<BookingFormProps> = ({
         <View style={[styles.doctorInfo, { backgroundColor: theme.softAccent }]}>
           <Text style={[styles.doctorName, { color: theme.textPrimary }]}>{doctor.name}</Text>
           <Text style={[styles.doctorSpecialty, { color: theme.textSecondary }]}>{doctor.specialty}</Text>
+          <View style={styles.doctorExtraInfo}>
+            {doctor.city && (
+              <View style={styles.doctorIconRow}>
+                <Icon name="map-marker" size={12} color={theme.textSecondary} />
+                <Text style={[styles.doctorExtraText, { color: theme.textSecondary }]}>{doctor.city}</Text>
+              </View>
+            )}
+            {doctor.phone && (
+              <View style={styles.doctorIconRow}>
+                <Icon name="phone" size={12} color={theme.textSecondary} />
+                <Text style={[styles.doctorExtraText, { color: theme.textSecondary }]}>{doctor.phone}</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -616,6 +630,20 @@ const styles = StyleSheet.create({
   doctorSpecialty: {
     fontSize: 14,
     marginTop: 4,
+  },
+  doctorExtraInfo: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  doctorIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  doctorExtraText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   content: {
     flex: 1,

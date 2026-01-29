@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Doctor } from '../../../data/doctors';
 import { ThemePalette } from '../../../theme/palette';
 
@@ -27,6 +28,22 @@ const DoctorCard: React.FC<DoctorCardProps> = ({ doctor, theme, onBook }) => {
         <Text style={[styles.meta, { color: theme.textSecondary }]}>
           {doctor.experience} · ⭐ {doctor.rating}
         </Text>
+        
+        <View style={styles.extraInfo}>
+          {doctor.city && (
+            <View style={styles.iconRow}>
+              <Icon name="map-marker" size={14} color={theme.textSecondary} />
+              <Text style={[styles.extraText, { color: theme.textSecondary }]}>{doctor.city}</Text>
+            </View>
+          )}
+          {doctor.phone && (
+            <View style={styles.iconRow}>
+              <Icon name="phone" size={14} color={theme.textSecondary} />
+              <Text style={[styles.extraText, { color: theme.textSecondary }]}>{doctor.phone}</Text>
+            </View>
+          )}
+        </View>
+
         <Text style={[styles.availability, { color: theme.accent }]}>
           {doctor.availability}
         </Text>
@@ -63,6 +80,19 @@ const styles = StyleSheet.create({
   specialty: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  extraInfo: {
+    marginVertical: 4,
+    gap: 4,
+  },
+  iconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  extraText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   meta: {
     fontSize: 13,

@@ -10,10 +10,11 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { ThemePalette } from '../../../theme/palette';
-import { doctors, Doctor } from '../../../data/doctors';
+import { doctors as initialDoctors, Doctor } from '../../../data/doctors';
 import DoctorCard from '../components/DoctorCard';
 import { sessions } from '../data';
 import BookingForm, { BookingFormData } from '../components/BookingForm';
+import { getAllDoctors } from '../../../utils/api';
 
 type DoctorListScreenProps = {
   theme: ThemePalette;
@@ -34,6 +35,39 @@ const DoctorListScreen: React.FC<DoctorListScreenProps> = ({
   const [activeSpecialty, setActiveSpecialty] = useState<string | null>(specialty || null);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [showBookingForm, setShowBookingForm] = useState(false);
+  const [backendDoctors, setBackendDoctors] = useState<Doctor[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    const fetchDoctors = async () => {
+      try {
+        const res = await getAllDoctors();
+        if (res && res.success && res.profiles) {
+          const mapped: Doctor[] = res.profiles.map((p: any) => {
+            const clinic = p.basicInfo?.clinic || '';
+            const city = clinic.includes(',') ? clinic.split(',').pop()?.trim() : clinic;
+            return {
+              name: p.basicInfo?.name || 'Unknown Doctor',
+              specialty: p.basicInfo?.specialty || 'General',
+              experience: p.basicInfo?.experience || 'N/A',
+              rating: p.publicStats?.averageRating?.toString() || '0',
+              availability: 'Available Soon',
+              city: city || 'Pune',
+              phone: p.userId?.phone || p.basicInfo?.phone || '',
+            };
+          });
+          setBackendDoctors(mapped);
+        }
+      } catch (e) {
+        console.log('Error fetching all doctors:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDoctors();
+  }, []);
+
+  const displayDoctors = backendDoctors.length > 0 ? backendDoctors : initialDoctors;
 
   const specialties = [
     { title: 'Cardiology', query: 'cardio', icon: 'heart', color: theme.danger },
@@ -44,7 +78,7 @@ const DoctorListScreen: React.FC<DoctorListScreenProps> = ({
   ];
 
   const filteredDoctors = useMemo(() => {
-    return doctors.filter(doctor => {
+    return displayDoctors.filter((doctor: Doctor) => {
       const matchesSearch = !searchQuery.trim() || 
         doctor.name.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
         doctor.specialty.toLowerCase().includes(searchQuery.trim().toLowerCase());
@@ -55,7 +89,7 @@ const DoctorListScreen: React.FC<DoctorListScreenProps> = ({
 
       return matchesSearch && matchesSpecialty;
     });
-  }, [searchQuery, activeSpecialty]);
+  }, [searchQuery, activeSpecialty, displayDoctors]);
 
   const handleBookAppointment = (doctor: Doctor) => {
     setSelectedDoctor(doctor);
@@ -150,7 +184,7 @@ const DoctorListScreen: React.FC<DoctorListScreenProps> = ({
           </Text>
           
           {filteredDoctors.length > 0 ? (
-            filteredDoctors.map(doctor => (
+            filteredDoctors.map((doctor: Doctor) => (
               <View key={doctor.name} style={styles.doctorCardWrapper}>
                 <DoctorCard
                   doctor={doctor}
