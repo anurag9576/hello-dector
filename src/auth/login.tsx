@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -38,6 +38,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [snackMessage, setSnackMessage] = useState('');
+  const [snackVisible, setSnackVisible] = useState(false);
+
+  const showSnack = (message: string) => {
+    setSnackMessage(message);
+    setSnackVisible(true);
+  };
 
   const trimmedContact = contact.trim();
   const showPasswordField = trimmedContact.includes('@');
@@ -59,6 +66,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     setTimeout(() => {
       setLoading(false);
       onOtpRequest?.({ contact: trimmed, channel: 'sms' });
+      showSnack('Login successful');
     }, 1000);
   };
 
@@ -74,9 +82,16 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
+      showSnack('Login successful');
       onSuccess?.();
     }, 1000);
   };
+
+  useEffect(() => {
+    if (!snackVisible) return;
+    const timer = setTimeout(() => setSnackVisible(false), 2500);
+    return () => clearTimeout(timer);
+  }, [snackVisible]);
 
   return (
     <KeyboardAvoidingView
@@ -201,6 +216,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
           </Text>
         </View>
       </ScrollView>
+      {snackVisible && (
+        <View style={styles.snackbar}>
+          <Text style={styles.snackbarText}>{snackMessage}</Text>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 };
@@ -208,12 +228,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    position: 'relative',
   },
   content: {
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 10,
     gap: 24,
   },
   brandBadge: {
@@ -295,6 +316,21 @@ const styles = StyleSheet.create({
   forgotText: {
     alignSelf: 'flex-end',
     color: '#007BFF',
+    fontWeight: '600',
+  },
+  snackbar: {
+    position: 'absolute',
+    bottom: 24,
+    left: 16,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  snackbarText: {
+    color: '#fff',
     fontWeight: '600',
   },
 });
