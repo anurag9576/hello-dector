@@ -54,6 +54,7 @@ const DoctorListScreen: React.FC<DoctorListScreenProps> = ({
               availability: 'Available Soon',
               city: city || 'Pune',
               phone: p.userId?.phone || p.basicInfo?.phone || '',
+              userId: p.userId?._id || p.userId || '',
             };
           });
           setBackendDoctors(mapped);

@@ -13,6 +13,8 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Doctor } from '../../../data/doctors';
 import { ThemePalette } from '../../../theme/palette';
 
+import { usePatientProfile } from '../hooks/usePatientProfile';
+
 type BookingFormProps = {
   visible: boolean;
   doctor: Doctor;
@@ -47,6 +49,8 @@ const BookingForm: React.FC<BookingFormProps> = ({
   onClose,
   onBookAppointment,
 }) => {
+  const { patientMeta, fullProfile } = usePatientProfile();
+
   const [formData, setFormData] = useState<BookingFormData>({
     patientName: '',
     age: '',
@@ -65,6 +69,22 @@ const BookingForm: React.FC<BookingFormProps> = ({
     policyNumber: '',
     reasonForVisit: '',
   });
+
+  // Pre-fill data when the form opens
+  React.useEffect(() => {
+    if (visible && fullProfile) {
+      setFormData(prev => ({
+        ...prev,
+        patientName: patientMeta.fullName || '',
+        phone: fullProfile.contact?.phone || '',
+        email: fullProfile.contact?.email || '',
+        age: fullProfile.personal?.age?.toString() || '',
+        gender: fullProfile.personal?.gender || '',
+        medicalHistory: fullProfile.medical?.chronicConditions?.join(', ') || '',
+        allergies: fullProfile.medical?.allergies?.join(', ') || '',
+      }));
+    }
+  }, [visible, fullProfile, patientMeta]);
 
   const [currentSection, setCurrentSection] = useState(0);
   const [showGenderDropdown, setShowGenderDropdown] = useState(false);

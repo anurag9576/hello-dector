@@ -99,7 +99,7 @@ export const useLiveWeather = (city: string) => {
           setWeather(prev => ({ ...prev, loading: false }));
         }
       } catch (err) {
-        console.error('Weather fetch error:', err);
+        console.log('Weather fetch error:', err);
         setWeather(prev => ({ ...prev, loading: false }));
       }
     };

@@ -80,5 +80,25 @@ export const updatePatientProfile = (profileData: any) => apiCall('patient/updat
 export const getDoctorProfile = () => apiCall('doctor/get-profile', 'GET');
 export const saveDoctorProfile = (profileData: any) => apiCall('doctor/save-profile', 'POST', profileData);
 export const updateDoctorProfile = (profileData: any) => apiCall('doctor/update-profile', 'POST', profileData);
-export const getAllDoctors = () => apiCall('doctor/all-profiles', 'GET');
+export const getAllDoctors = (city?: string) => {
+  const endpoint = city ? `doctor/all-profiles?city=${encodeURIComponent(city)}` : 'doctor/all-profiles';
+  return apiCall(endpoint, 'GET');
+};
 
+// Doctor Notification Services
+export const notifyDoctor = (data: {
+  doctorUserId: string;
+  type: string;
+  title: string;
+  message: string;
+  appointmentData?: any;
+}) => apiCall('doctor/notify', 'POST', data);
+
+export const getDoctorNotifications = () => apiCall('doctor/notifications', 'GET');
+export const markNotificationsRead = (data: { notificationIds?: string[]; userId?: string }) =>
+  apiCall('doctor/notifications/read', 'POST', data);
+
+// Appointment Services
+export const bookAppointment = (appointmentData: any) => apiCall('patient/book-appointment', 'POST', appointmentData);
+export const getPatientAppointments = () => apiCall('patient/appointments', 'GET');
+export const getDoctorAppointments = () => apiCall('doctor/appointments', 'GET');

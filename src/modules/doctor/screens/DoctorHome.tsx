@@ -7,11 +7,12 @@ import {
   View,
   StatusBar,
   Image,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { ThemePalette } from '../../../theme/palette';
 import { useThemeContext } from '../../../theme/ThemeContext';
-import { getDoctorProfile } from '../../../utils/api';
+import { getDoctorProfile, getDoctorNotifications, markNotificationsRead } from '../../../utils/api';
 import { getUserSession } from '../../../utils/storage';
 
 type DoctorHomeProps = {
@@ -24,6 +25,9 @@ const DoctorHome: React.FC<DoctorHomeProps> = ({ theme, onLogout, onViewCalendar
   const { mode } = useThemeContext();
   const [profile, setProfile] = React.useState({ name: '', profileImage: '' });
   const [isReady, setIsReady] = React.useState(false);
+  const [notifications, setNotifications] = React.useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = React.useState(0);
+  const [showNotifications, setShowNotifications] = React.useState(false);
 
   React.useEffect(() => {
     const loadInitialData = async () => {
@@ -64,23 +68,104 @@ const DoctorHome: React.FC<DoctorHomeProps> = ({ theme, onLogout, onViewCalendar
     loadInitialData().then(fetchProfile);
   }, []);
 
+  // Fetch notifications
+  React.useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const res = await getDoctorNotifications();
+        if (res?.success) {
+          setNotifications(res.notifications || []);
+          setUnreadCount(res.unreadCount || 0);
+        }
+      } catch (e) {
+        console.log('Notification fetch error:', e);
+      }
+    };
+    fetchNotifications();
+    // Poll every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleMarkAllRead = async () => {
+    try {
+      const session = await getUserSession();
+      const userId = session?.userId || session?.user?.id || session?.data?._id;
+      if (userId) {
+        await markNotificationsRead({ userId });
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        setUnreadCount(0);
+      }
+    } catch (e) {
+      console.log('Mark read error:', e);
+    }
+  };
+
+  const handleNotifClick = async (notifId: string) => {
+    // Optimistically close modal and navigate
+    setShowNotifications(false);
+    if (onViewCalendar) {
+      onViewCalendar();
+    }
+    // Mark as read
+    try {
+      const session = await getUserSession();
+      const userId = session?.userId || session?.user?.id || session?.data?._id;
+      if (userId) {
+        await markNotificationsRead({ userId, notificationIds: [notifId] });
+        setNotifications(prev => prev.map(n => n._id === notifId ? { ...n, read: true } : n));
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (e) {
+      console.log('Failed to mark notification as read:', e);
+    }
+  };
+
+  const formatTimeAgo = (dateStr: string) => {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffMs = now.getTime() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    const diffDay = Math.floor(diffHr / 24);
+    return `${diffDay}d ago`;
+  };
+
+  const getStatusBadgeStyle = (status: string) => {
+    switch (status) {
+      case 'In-Call':
+        return {
+          backgroundColor: '#DCFCE7',
+          textColor: '#166534',
+        };
+      case 'Waiting':
+        return {
+          backgroundColor: '#FEF3C7',
+          textColor: '#D97706',
+        };
+      default:
+        return {
+          backgroundColor: '#F3F4F6',
+          textColor: theme.textSecondary,
+        };
+    }
+  };
+
   if (!isReady) {
     return null;
   }
 
   const metrics = [
-    { label: 'Total Patients', value: '1.2k', icon: 'account-group', color: theme.accent, trend: '+12%' },
-    { label: 'Appointments', value: '42', icon: 'calendar-check', color: theme.hero, trend: '+5%' },
-    { label: 'Pending Reviews', value: '5', icon: 'file-document-edit', color: theme.warning, trend: '-2' },
-    { label: 'Rating', value: '4.9', icon: 'star', color: '#FBBF24', trend: 'High' },
+    { label: 'Total Patients', value: '0', icon: 'account-group', color: theme.accent, trend: '0%' },
+    { label: 'Appointments', value: '0', icon: 'calendar-check', color: theme.hero, trend: '0%' },
+    { label: 'Pending Reviews', value: '0', icon: 'file-document-edit', color: theme.warning, trend: '0' },
+    { label: 'Rating', value: '0.0', icon: 'star', color: '#FBBF24', trend: 'New' },
   ];
 
-  const upcomingAppointments = [
-    { name: 'Rahul Sharma', time: '10:00 AM', type: 'Video', status: 'In-Call', gender: 'Male, 28' },
-    { name: 'Priya Verma', time: '11:30 AM', type: 'In-Clinic', status: 'Waiting', gender: 'Female, 34' },
-    { name: 'Amit Singh', time: '02:00 PM', type: 'In-Clinic', status: 'Confirmed', gender: 'Male, 45' },
-    { name: 'Sneha Patil', time: '04:15 PM', type: 'Video', status: 'Confirmed', gender: 'Female, 29' },
-  ];
+  const upcomingAppointments: any[] = [];
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -110,9 +195,13 @@ const DoctorHome: React.FC<DoctorHomeProps> = ({ theme, onLogout, onViewCalendar
              </View>
            </View>
         </View>
-        <TouchableOpacity style={[styles.iconBtn, { backgroundColor: theme.background }]}>
+        <TouchableOpacity style={[styles.iconBtn, { backgroundColor: theme.background }]} onPress={() => setShowNotifications(true)}>
           <Icon name="bell-outline" size={24} color={theme.textPrimary} />
-          <View style={[styles.badge, { backgroundColor: theme.danger }]} />
+          {unreadCount > 0 && (
+            <View style={[styles.badge, { backgroundColor: theme.danger }]}>
+              <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -120,8 +209,8 @@ const DoctorHome: React.FC<DoctorHomeProps> = ({ theme, onLogout, onViewCalendar
         
         {/* Modern Metrics Grid */}
         <View style={styles.metricsGrid}>
-          {metrics.map((item, index) => (
-            <View key={index} style={[styles.metricCard, { backgroundColor: theme.card }]}>
+          {metrics.map((item) => (
+            <View key={item.label} style={[styles.metricCard, { backgroundColor: theme.card }]}>
               <View style={styles.metricHeader}>
                  <View style={[styles.metricIcon, { backgroundColor: item.color + '15' }]}>
                     <Icon name={item.icon} size={22} color={item.color} />
@@ -171,49 +260,135 @@ const DoctorHome: React.FC<DoctorHomeProps> = ({ theme, onLogout, onViewCalendar
             </TouchableOpacity>
           </View>
           
-          {upcomingAppointments.map((appt, i) => (
-            <View key={i} style={[styles.apptCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <View style={styles.apptLeft}>
-                 <View style={[styles.timeBadge, { backgroundColor: theme.background }]}>
-                    <Text style={[styles.timeText, { color: theme.textPrimary }]}>{appt.time}</Text>
-                 </View>
-                 <View style={styles.verticalLine} />
-              </View>
-              
-              <View style={styles.apptContent}>
-                 <View style={styles.apptHeader}>
-                    <Text style={[styles.apptName, { color: theme.textPrimary }]}>{appt.name}</Text>
-                    {appt.type === 'Video' ? (
-                       <Icon name="video" size={18} color="#7C3AED" />
-                    ) : (
-                       <Icon name="hospital-building" size={18} color="#059669" />
-                    )}
-                 </View>
-                 <Text style={[styles.apptGender, { color: theme.textSecondary }]}>{appt.gender}</Text>
-                 
-                 <View style={styles.apptFooter}>
-                    <View style={[
-                       styles.statusBadge, 
-                       { backgroundColor: appt.status === 'In-Call' ? '#DCFCE7' : appt.status === 'Waiting' ? '#FEF3C7' : '#F3F4F6' }
-                    ]}>
-                       <Text style={{ 
-                          fontSize: 12, 
-                          fontWeight: '600', 
-                          color: appt.status === 'In-Call' ? '#166534' : appt.status === 'Waiting' ? '#D97706' : theme.textSecondary 
-                       }}>
-                          {appt.status}
-                       </Text>
-                    </View>
-                    <TouchableOpacity style={styles.actionIcon}>
-                       <Icon name="chevron-right" size={20} color={theme.textSecondary} />
-                    </TouchableOpacity>
-                 </View>
-              </View>
+          {upcomingAppointments.length > 0 ? (
+            upcomingAppointments.map((appt, i) => {
+              const badgeStyle = getStatusBadgeStyle(appt.status);
+              return (
+                <View key={appt.id || appt._id || `${appt.name}-${appt.time}-${i}`} style={[styles.apptCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <View style={styles.apptLeft}>
+                     <View style={[styles.timeBadge, { backgroundColor: theme.background }]}>
+                        <Text style={[styles.timeText, { color: theme.textPrimary }]}>{appt.time}</Text>
+                     </View>
+                     <View style={styles.verticalLine} />
+                  </View>
+                  
+                  <View style={styles.apptContent}>
+                     <View style={styles.apptHeader}>
+                        <Text style={[styles.apptName, { color: theme.textPrimary }]}>{appt.name}</Text>
+                        {appt.type === 'Video' ? (
+                           <Icon name="video" size={18} color="#7C3AED" />
+                        ) : (
+                           <Icon name="hospital-building" size={18} color="#059669" />
+                        )}
+                     </View>
+                     <Text style={[styles.apptGender, { color: theme.textSecondary }]}>{appt.gender}</Text>
+                     
+                     <View style={styles.apptFooter}>
+                        <View style={[
+                           styles.statusBadge, 
+                           { backgroundColor: badgeStyle.backgroundColor }
+                        ]}>
+                           <Text style={{ 
+                              fontSize: 12, 
+                              fontWeight: '600', 
+                              color: badgeStyle.textColor 
+                           }}>
+                              {appt.status}
+                           </Text>
+                        </View>
+                        <TouchableOpacity style={styles.actionIcon}>
+                           <Icon name="chevron-right" size={20} color={theme.textSecondary} />
+                        </TouchableOpacity>
+                     </View>
+                  </View>
+                </View>
+              );
+            })
+          ) : (
+            <View style={{ padding: 24, alignItems: 'center' }}>
+              <Icon name="calendar-blank" size={48} color={theme.border} />
+              <Text style={{ color: theme.textSecondary, marginTop: 12 }}>No appointments in queue for today.</Text>
             </View>
-          ))}
+          )}
         </View>
 
       </ScrollView>
+
+      {/* Notifications Modal */}
+      <Modal
+        visible={showNotifications}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowNotifications(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+              <TouchableOpacity onPress={() => setShowNotifications(false)} style={styles.modalCloseBtn}>
+                <Icon name="close" size={24} color={theme.textPrimary} />
+              </TouchableOpacity>
+              <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Notifications</Text>
+              {unreadCount > 0 ? (
+                <TouchableOpacity onPress={handleMarkAllRead}>
+                  <Text style={[styles.markReadText, { color: theme.accent }]}>Mark all read</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={{ width: 40 }} />
+              )}
+            </View>
+
+            <ScrollView contentContainerStyle={styles.notifScrollContent} showsVerticalScrollIndicator={false}>
+              {notifications.length > 0 ? (
+                notifications.map((notif, idx) => (
+                  <TouchableOpacity
+                    key={notif._id || `notif-${notif.createdAt || idx}`}
+                    activeOpacity={0.7}
+                    onPress={() => handleNotifClick(notif._id)}
+                    style={[
+                      styles.notifCard,
+                      {
+                        backgroundColor: notif.read ? theme.card : theme.accent + '08',
+                        borderColor: notif.read ? theme.border : theme.accent + '20',
+                        borderWidth: 1,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.notifIconWrap, { backgroundColor: theme.accent + '15' }]}>
+                      <Icon
+                        name={notif.type === 'appointment_booked' ? 'calendar-check' : 'bell'}
+                        size={20}
+                        color={theme.accent}
+                      />
+                    </View>
+                    <View style={styles.notifBody}>
+                      <Text style={[styles.notifTitle, { color: theme.textPrimary }]} numberOfLines={1}>
+                        {notif.title}
+                      </Text>
+                      <Text style={[styles.notifMsg, { color: theme.textSecondary }]} numberOfLines={2}>
+                        {notif.message}
+                      </Text>
+                      <Text style={[styles.notifTime, { color: theme.textSecondary }]}>
+                        {formatTimeAgo(notif.createdAt)}
+                      </Text>
+                    </View>
+                    {!notif.read && (
+                      <View style={[styles.unreadDot, { backgroundColor: theme.accent }]} />
+                    )}
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View style={styles.emptyNotif}>
+                  <View style={[styles.emptyNotifIcon, { backgroundColor: theme.card }]}>
+                    <Icon name="bell-off-outline" size={48} color={theme.textSecondary} />
+                  </View>
+                  <Text style={[styles.emptyNotifTitle, { color: theme.textPrimary }]}>No notifications</Text>
+                  <Text style={[styles.emptyNotifSub, { color: theme.textSecondary }]}>You're all caught up!</Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -263,13 +438,21 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    borderWidth: 1,
+    top: 6,
+    right: 6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
     borderColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '800',
   },
   scrollContent: {
     padding: 20,
@@ -425,6 +608,106 @@ const styles = StyleSheet.create({
   },
   actionIcon: {
     padding: 4,
+  },
+  // ── Notification Cards ──
+  notifCard: {
+    flexDirection: 'row',
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 12,
+    alignItems: 'flex-start',
+    marginBottom: 2,
+  },
+  notifIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notifBody: {
+    flex: 1,
+    gap: 3,
+  },
+  notifTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  notifMsg: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  notifTime: {
+    fontSize: 11,
+    fontWeight: '500',
+    opacity: 0.6,
+    marginTop: 2,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    height: '85%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderBottomWidth: 1,
+  },
+  modalCloseBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  markReadText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  notifScrollContent: {
+    padding: 20,
+    paddingBottom: 40,
+    gap: 12,
+  },
+  emptyNotif: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 80,
+  },
+  emptyNotifIcon: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyNotifTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  emptyNotifSub: {
+    fontSize: 14,
   },
 });
 

@@ -24,6 +24,7 @@ import { ThemePalette } from '../../../theme/palette';
 import { usePatientProfile } from '../hooks/usePatientProfile';
 import { addSession } from '../data';
 import BookingForm, { BookingFormData } from '../components/BookingForm';
+import { bookAppointment } from '../../../utils/api';
 
 type TabKey = 'home' | 'calendar' | 'labs' | 'profile' | 'chat';
 
@@ -246,6 +247,19 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isDoctorListOpen, setIsDoctorListOpen] = useState(false);
   const [doctorListType, setDoctorListType] = useState<DoctorListType>(null);
+  const [showDirectBookingForm, setShowDirectBookingForm] = useState(false);
+
+  const directBookingDoctor = {
+    id: 'direct-booking',
+    name: 'General Appointment',
+    specialty: 'Any Available Doctor',
+    experience: '-',
+    rating: '-',
+    availability: 'Available Soon',
+    city: 'HelloDoctor Clinic',
+    phone: '',
+    initials: 'HD'
+  };
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -327,7 +341,7 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
     setActiveTab('calendar');
   };
 
-  const handleBookAppointment = (doctor: any, formData?: BookingFormData) => {
+  const handleBookAppointment = async (doctor: any, formData?: BookingFormData) => {
     // Create new appointment with form data
     const newAppointment = {
       date: formData?.preferredDate || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -349,6 +363,28 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
     
     // Add to sessions data
     addSession(newAppointment);
+
+    // Notify the doctor via backend if userId is available
+    if (doctor.userId && doctor.userId !== 'direct-booking') {
+      try {
+        await bookAppointment({
+          doctorId: doctor.userId,
+          doctorName: doctor.name,
+          date: newAppointment.date,
+          time: newAppointment.time,
+          consultationType: newAppointment.consultationType,
+          symptoms: newAppointment.symptoms,
+          medicalHistory: newAppointment.medicalHistory,
+          phone: newAppointment.patientPhone,
+          patientName: newAppointment.patientName,
+          gender: formData?.gender,
+          age: formData?.age
+        });
+        console.log('Appointment booked and doctor notified successfully');
+      } catch (err) {
+        console.log('Failed to book appointment on backend:', err);
+      }
+    }
     
     // Close doctor list and go to calendar tab (Exam)
     setIsDoctorListOpen(false);
@@ -410,7 +446,7 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
     }
     switch (activeTab) {
       case 'calendar':
-        return <CalendarScreen theme={theme} onBack={() => setActiveTab('home')} />;
+        return <CalendarScreen theme={theme} onBack={() => setActiveTab('home')} onBookNew={() => setShowDirectBookingForm(true)} />;
       case 'labs':
         return <LabsScreen theme={theme} onBack={() => setActiveTab('home')} />;
       case 'chat':
@@ -501,6 +537,19 @@ const PatientTabs: React.FC<PatientTabsProps> = ({ theme, onLogout }) => {
         })}
         </View>
       )}
+
+      {showDirectBookingForm && (
+        <BookingForm
+          visible={showDirectBookingForm}
+          doctor={directBookingDoctor}
+          theme={theme}
+          onClose={() => setShowDirectBookingForm(false)}
+          onBookAppointment={(formData) => {
+            handleBookAppointment(directBookingDoctor, formData);
+            setShowDirectBookingForm(false);
+          }}
+        />
+      )}
     </View>
   );
 };
@@ -517,23 +566,28 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   profileCard: {
-    borderRadius: 26,
+    borderRadius: 28,
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 6,
   },
   profileAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
+    width: 62,
+    height: 62,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   profileInitials: {
     color: '#0F1F1A',
@@ -555,10 +609,15 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   profileSection: {
-    borderRadius: 24,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    gap: 4,
+    borderRadius: 26,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    gap: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
   },
   sectionLabel: {
     fontSize: 13,
@@ -577,9 +636,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   profileIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -598,32 +657,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'stretch',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingBottom: 8,
-    paddingTop: 6,
-    borderTopWidth: 1,
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+    paddingTop: 8,
+    borderTopWidth: 0,
+    borderRadius: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -6 },
+    elevation: 12,
   },
   tabButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    gap: 4,
+    paddingVertical: 8,
+    gap: 3,
+    borderRadius: 20,
   },
   tabIcon: {
-    fontSize: 20,
+    fontSize: 22,
   },
   profileTabIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
   },
   tabLabel: {
-    fontSize: 12,
+    fontSize: 11,
+    letterSpacing: 0.1,
   },
 });
 

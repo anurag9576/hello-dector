@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
-import { doctors as allDoctors, Doctor as GlobalDoctor } from '../../../data/doctors';
+import { Doctor as GlobalDoctor } from '../../../data/doctors';
 import { ThemePalette } from '../../../theme/palette';
 import { usePatientProfile } from '../hooks/usePatientProfile';
+import { getAllDoctors } from '../../../utils/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Doctor = {
   id: string;
@@ -34,12 +37,16 @@ type ChatMessage = {
   isUser: boolean;
   timestamp: Date;
   sender?: string;
+  status?: 'sent' | 'delivered' | 'read'; // WhatsApp-style tick system
 };
 
 type ChatProps = {
   theme: ThemePalette;
   onBack: () => void;
 };
+
+const CHAT_DOCTORS_KEY = '@hellodoctor_chat_doctors';
+const CHAT_MESSAGES_KEY = '@hellodoctor_chat_messages';
 
 const WhatsAppColors = {
   header: '#F8FAFC',
@@ -53,33 +60,9 @@ const WhatsAppColors = {
   check: '#34B7F1',
 };
 
-// Seed doctors for initial state
-const initialDoctors: Doctor[] = [
-  {
-    id: 'Dr. Raghav Mehta',
-    name: 'Dr. Raghav Mehta',
-    specialty: 'Neurologist',
-    lastMessage: 'Check the Neurological report...',
-    lastMessageTime: '10:30 AM',
-    unreadCount: 2,
-    isOnline: true,
-    initials: 'RM',
-  },
-  {
-    id: 'Dr. Priya Sharma',
-    name: 'Dr. Priya Sharma',
-    specialty: 'Cardiologist',
-    lastMessage: 'Your ECG is fine.',
-    lastMessageTime: 'Yesterday',
-    unreadCount: 0,
-    isOnline: false,
-    initials: 'PS',
-  },
-];
-
 const Chat: React.FC<ChatProps> = ({ theme, onBack }) => {
   const { patientMeta } = usePatientProfile();
-  const [activeDoctors, setActiveDoctors] = useState<Doctor[]>(initialDoctors);
+  const [activeDoctors, setActiveDoctors] = useState<Doctor[]>([]);
   const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearchVisible, setIsSearchVisible] = useState(false);
@@ -87,16 +70,79 @@ const Chat: React.FC<ChatProps> = ({ theme, onBack }) => {
   const flatListRef = useRef<FlatList>(null);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [backendDoctorsList, setBackendDoctorsList] = useState<GlobalDoctor[]>([]);
+  const [loadingBackendDocs, setLoadingBackendDocs] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
 
-  const [messagesByDoctor, setMessagesByDoctor] = useState<Record<string, ChatMessage[]>>({
-    'Dr. Raghav Mehta': [
-      { id: '1', text: 'Hello! I\'m Dr. Raghav Mehta. How can I help you today?', isUser: false, timestamp: new Date(Date.now() - 3600000), sender: 'Dr. Raghav Mehta' },
-      { id: '2', text: 'Good morning doctor. I\'ve been experiencing frequent headaches lately.', isUser: true, timestamp: new Date(Date.now() - 3000000) },
-    ],
-    'Dr. Priya Sharma': [
-      { id: '3', text: 'Hello, I have reviewed your test results. Everything looks normal.', isUser: false, timestamp: new Date(Date.now() - 86400000), sender: 'Dr. Priya Sharma' },
-    ]
-  });
+  const [messagesByDoctor, setMessagesByDoctor] = useState<Record<string, ChatMessage[]>>({});
+
+  // Load persisted chats on mount
+  useEffect(() => {
+    const loadChats = async () => {
+      try {
+        const [docsJson, msgsJson] = await Promise.all([
+          AsyncStorage.getItem(CHAT_DOCTORS_KEY),
+          AsyncStorage.getItem(CHAT_MESSAGES_KEY),
+        ]);
+        if (docsJson) {
+          setActiveDoctors(JSON.parse(docsJson));
+        }
+        if (msgsJson) {
+          const parsed = JSON.parse(msgsJson);
+          // Restore Date objects from strings
+          const restored: Record<string, ChatMessage[]> = {};
+          Object.keys(parsed).forEach(key => {
+            restored[key] = parsed[key].map((m: any) => ({
+              ...m,
+              timestamp: new Date(m.timestamp),
+            }));
+          });
+          setMessagesByDoctor(restored);
+        }
+      } catch (e) {
+        console.log('Error loading chats:', e);
+      } finally {
+        setIsLoaded(true);
+      }
+    };
+    loadChats();
+  }, []);
+
+  // Save chats whenever they change
+  useEffect(() => {
+    if (!isLoaded) return; // Don't save before initial load
+    AsyncStorage.setItem(CHAT_DOCTORS_KEY, JSON.stringify(activeDoctors)).catch(console.log);
+  }, [activeDoctors, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    AsyncStorage.setItem(CHAT_MESSAGES_KEY, JSON.stringify(messagesByDoctor)).catch(console.log);
+  }, [messagesByDoctor, isLoaded]);
+
+  // Fetch doctors from backend when selector opens
+  useEffect(() => {
+    if (isSelectingDoctor && backendDoctorsList.length === 0) {
+      setLoadingBackendDocs(true);
+      getAllDoctors()
+        .then((res: any) => {
+          if (res && res.success && res.profiles) {
+            const mapped: GlobalDoctor[] = res.profiles.map((p: any) => ({
+              name: p.basicInfo?.name || 'Unknown Doctor',
+              specialty: p.basicInfo?.specialty || 'General',
+              experience: p.basicInfo?.experience || 'N/A',
+              rating: p.publicStats?.averageRating?.toString() || '0',
+              availability: 'Available',
+              city: p.basicInfo?.clinic || '',
+              phone: p.userId?.phone || '',
+              userId: p.userId?._id || p.userId || '',
+            }));
+            setBackendDoctorsList(mapped);
+          }
+        })
+        .catch((err: any) => console.log('Error fetching doctors for chat:', err))
+        .finally(() => setLoadingBackendDocs(false));
+    }
+  }, [isSelectingDoctor]);
 
   // Filter doctors: only show those we have chatted with
   const filteredDoctors = activeDoctors.filter(doc => {
@@ -145,6 +191,7 @@ const Chat: React.FC<ChatProps> = ({ theme, onBack }) => {
         imageUri,
         isUser: true,
         timestamp: new Date(),
+        status: 'sent', // Single tick — not yet read by doctor
       };
 
       setMessagesByDoctor(prev => ({
@@ -163,37 +210,6 @@ const Chat: React.FC<ChatProps> = ({ theme, onBack }) => {
 
       setInputMessage('');
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-
-      if (!imageUri) {
-        setIsTyping(true);
-        setTimeout(() => {
-          const responseText = 'I have received your message. How else can I assist you?';
-          const doctorResponse: ChatMessage = {
-            id: (Date.now() + 1).toString(),
-            text: responseText,
-            isUser: false,
-            timestamp: new Date(),
-            sender: selectedDoctor,
-          };
-          
-          setMessagesByDoctor(prev => ({
-            ...prev,
-            [selectedDoctor]: [...(prev[selectedDoctor] || []), doctorResponse]
-          }));
-
-          // Updated doctor preview for response
-          setActiveDoctors(prev => {
-            const docIndex = prev.findIndex(d => d.id === selectedDoctor);
-            if (docIndex === -1) return prev;
-            const updatedDoc = { ...prev[docIndex], lastMessage: responseText, lastMessageTime: 'Now' };
-            const otherDocs = prev.filter(d => d.id !== selectedDoctor);
-            return [updatedDoc, ...otherDocs];
-          });
-
-          setIsTyping(false);
-          setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-        }, 2000);
-      }
     }
   };
 
@@ -230,18 +246,33 @@ const Chat: React.FC<ChatProps> = ({ theme, onBack }) => {
     </TouchableOpacity>
   );
 
-  const renderMessage = ({ item }: { item: ChatMessage }) => (
-    <View style={[styles.messageContainer, item.isUser ? styles.userMessageAlign : styles.otherMessageAlign]}>
-      <View style={[styles.messageBubble, item.isUser ? styles.userBubble : styles.otherBubble]}>
-        {item.imageUri && <Image source={{ uri: item.imageUri }} style={styles.messageImage} />}
-        {item.text && <Text style={styles.messageText}>{item.text}</Text>}
-        <View style={styles.messageFooter}>
-          <Text style={styles.messageTime}>{item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-          {item.isUser && <Icon name="check-all" size={16} color={WhatsAppColors.check} style={styles.checkIcon} />}
+  const renderMessage = ({ item }: { item: ChatMessage }) => {
+    // Tick icon logic: sent = single grey, delivered = double grey, read = double blue
+    const getTickIcon = () => {
+      if (!item.isUser) return null;
+      const status = item.status || 'sent';
+      if (status === 'read') {
+        return <Icon name="check-all" size={16} color={WhatsAppColors.check} style={styles.checkIcon} />;
+      } else if (status === 'delivered') {
+        return <Icon name="check-all" size={16} color="#8696A0" style={styles.checkIcon} />;
+      } else {
+        return <Icon name="check" size={16} color="#8696A0" style={styles.checkIcon} />;
+      }
+    };
+
+    return (
+      <View style={[styles.messageContainer, item.isUser ? styles.userMessageAlign : styles.otherMessageAlign]}>
+        <View style={[styles.messageBubble, item.isUser ? styles.userBubble : styles.otherBubble]}>
+          {item.imageUri && <Image source={{ uri: item.imageUri }} style={styles.messageImage} />}
+          {item.text && <Text style={styles.messageText}>{item.text}</Text>}
+          <View style={styles.messageFooter}>
+            <Text style={styles.messageTime}>{item.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+            {getTickIcon()}
+          </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   // Selector View (Top Doctors)
   if (isSelectingDoctor) {
@@ -251,10 +282,22 @@ const Chat: React.FC<ChatProps> = ({ theme, onBack }) => {
           <TouchableOpacity style={styles.backButton} onPress={() => setIsSelectingDoctor(false)}>
             <Icon name="arrow-left" size={24} color={theme.textPrimary} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.textPrimary, flex: 1 }]}>Top Doctors</Text>
+          <Text style={[styles.headerTitle, { color: theme.textPrimary, flex: 1 }]}>Select Doctor</Text>
         </View>
+        {loadingBackendDocs ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={theme.accent} />
+            <Text style={{ color: theme.textSecondary, marginTop: 12, fontSize: 14 }}>Loading doctors...</Text>
+          </View>
+        ) : backendDoctorsList.length === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+            <Icon name="doctor" size={56} color={theme.textSecondary + '40'} />
+            <Text style={{ color: theme.textPrimary, fontSize: 17, fontWeight: '700', marginTop: 16 }}>No doctors found</Text>
+            <Text style={{ color: theme.textSecondary, fontSize: 13, textAlign: 'center', marginTop: 6 }}>No doctors are registered yet. Please try again later.</Text>
+          </View>
+        ) : (
         <FlatList
-          data={allDoctors}
+          data={backendDoctorsList}
           keyExtractor={item => item.name}
           renderItem={({ item }) => (
             <TouchableOpacity style={styles.doctorItem} onPress={() => handleSelectDoctor(item)}>
@@ -268,6 +311,7 @@ const Chat: React.FC<ChatProps> = ({ theme, onBack }) => {
             </TouchableOpacity>
           )}
         />
+        )}
       </View>
     );
   }
@@ -304,7 +348,25 @@ const Chat: React.FC<ChatProps> = ({ theme, onBack }) => {
             </View>
           )}
         </View>
-        <FlatList data={filteredDoctors} renderItem={renderDoctorItem} keyExtractor={item => item.id} style={styles.doctorsList} />
+        <FlatList
+          data={filteredDoctors}
+          renderItem={renderDoctorItem}
+          keyExtractor={item => item.id}
+          style={styles.doctorsList}
+          ListEmptyComponent={
+            <View style={styles.emptyChat}>
+              <View style={[styles.emptyChatIcon, { backgroundColor: theme.accent + '12' }]}>
+                <Icon name="chat-processing-outline" size={52} color={theme.accent} />
+              </View>
+              <Text style={[styles.emptyChatTitle, { color: theme.textPrimary }]}>
+                No conversations yet
+              </Text>
+              <Text style={[styles.emptyChatMsg, { color: theme.textSecondary }]}>
+                Tap the + button below to start{'\n'}chatting with a doctor
+              </Text>
+            </View>
+          }
+        />
         <TouchableOpacity style={[styles.fab, { backgroundColor: theme.accent }]} onPress={() => setIsSelectingDoctor(true)}>
           <Icon name="message-plus" size={26} color="#FFFFFF" />
         </TouchableOpacity>
@@ -603,6 +665,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 2,
+  },
+  // Empty Chat State
+  emptyChat: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 140,
+    paddingHorizontal: 32,
+    gap: 14,
+  },
+  emptyChatIcon: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  emptyChatTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  emptyChatMsg: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 21,
+    opacity: 0.6,
   },
 });
 

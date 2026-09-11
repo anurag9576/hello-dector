@@ -40,14 +40,9 @@ type DoctorTabsProps = {
 
 const DoctorTabs: React.FC<DoctorTabsProps> = ({ theme, onLogout }) => {
   const [activeTab, setActiveTab] = useState<TabKey>('home');
-  const [showCalendar, setShowCalendar] = useState(false);
   const [selectedPatientRecord, setSelectedPatientRecord] = useState<PatientRecord | null>(null);
 
   const renderContent = () => {
-    if (showCalendar && activeTab === 'home') {
-      return <DoctorCalendar theme={theme} onBack={() => setShowCalendar(false)} />;
-    }
-
     if (selectedPatientRecord && activeTab === 'patients') {
       return (
         <DoctorPatientDetails 
@@ -60,9 +55,9 @@ const DoctorTabs: React.FC<DoctorTabsProps> = ({ theme, onLogout }) => {
 
     switch (activeTab) {
       case 'home':
-        return <DoctorHome theme={theme} onLogout={onLogout} onViewCalendar={() => setShowCalendar(true)} />;
+        return <DoctorHome theme={theme} onLogout={onLogout} onViewCalendar={() => setActiveTab('appointments')} />;
       case 'appointments':
-        return <DoctorAppointments theme={theme} onBack={() => setActiveTab('home')} />;
+        return <DoctorCalendar theme={theme} onBack={() => setActiveTab('home')} />;
       case 'chat':
         return <DoctorChat theme={theme} onBack={() => setActiveTab('home')} />;
       case 'patients':

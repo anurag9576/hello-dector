@@ -5,13 +5,12 @@ import {
   Text,
   TouchableOpacity,
   View,
-  FlatList,
   Modal,
   Image,
-  Pressable,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { ThemePalette } from '../../../theme/palette';
+import { getDoctorAppointments } from '../../../utils/api';
 
 type Slot = {
   time: string;
@@ -41,6 +40,24 @@ const DoctorCalendar: React.FC<DoctorCalendarProps> = ({ theme, onBack }) => {
   const [selectedDate, setSelectedDate] = useState(new Date().getDate());
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [dbAppointments, setDbAppointments] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    const fetchAppointments = async () => {
+      try {
+        const res = await getDoctorAppointments();
+        if (res?.success) {
+          setDbAppointments(res.appointments || []);
+        }
+      } catch (err) {
+        console.log('Failed to fetch doctor appointments:', err);
+      }
+    };
+    fetchAppointments();
+    // Poll every 30 seconds to catch new bookings
+    const interval = setInterval(fetchAppointments, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const mockPatient: Patient = {
     name: 'Rahul Sharma',
@@ -65,18 +82,36 @@ const DoctorCalendar: React.FC<DoctorCalendarProps> = ({ theme, onBack }) => {
     { day: 'Sun', date: 1 },
   ];
 
-  const slots: Slot[] = [
-    { time: '09:00 AM', status: 'Booked', patient: 'Rahul Sharma' },
-    { time: '09:30 AM', status: 'Booked', patient: 'Sneha Patil' },
-    { time: '10:00 AM', status: 'Ongoing', patient: 'Amit Singh' },
-    { time: '10:30 AM', status: 'Available' },
-    { time: '11:00 AM', status: 'Break' },
-    { time: '11:30 AM', status: 'Available' },
-    { time: '12:00 PM', status: 'Booked', patient: 'Priya Verma' },
-    { time: '12:30 PM', status: 'Available' },
-    { time: '01:00 PM', status: 'Available' },
-    { time: '01:30 PM', status: 'Available' },
+  const allTimes = [
+    '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', 
+    '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM', 
+    '01:00 PM', '01:30 PM', '02:00 PM', '02:30 PM',
+    '03:00 PM', '03:30 PM', '04:00 PM', '04:30 PM', '05:00 PM'
   ];
+
+  const normalizeTime = (t: string) => {
+    if (!t) return '';
+    let normalized = t.trim().toUpperCase();
+    // Pad single digit hour with 0 (e.g., "9:30 AM" -> "09:30 AM")
+    if (/^\d:/.test(normalized)) {
+      normalized = '0' + normalized;
+    }
+    return normalized;
+  };
+
+  const slots: Slot[] = allTimes.map(time => {
+    // Check if we have an appointment at this time
+    const appt = dbAppointments.find(a => normalizeTime(a.time) === normalizeTime(time));
+    if (appt) {
+      return { time, status: appt.status === 'Confirmed' ? 'Booked' : appt.status, patient: appt.patientName };
+    }
+    // Hardcode a break at 11:00 AM for the UI aesthetic
+    if (time === '11:00 AM') return { time, status: 'Break' };
+    return { time, status: 'Available' };
+  });
+
+  const bookedCount = slots.filter(s => s.status === 'Booked' || s.status === 'Ongoing').length;
+  const availableCount = slots.filter(s => s.status === 'Available').length;
 
   const getStatusColor = (status: Slot['status']) => {
     switch (status) {
@@ -107,9 +142,9 @@ const DoctorCalendar: React.FC<DoctorCalendarProps> = ({ theme, onBack }) => {
          {/* Calendar Strip */}
          <View style={styles.calendarStrip}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daysScroll}>
-               {days.map((item, index) => (
+               {days.map((item) => (
                  <TouchableOpacity 
-                   key={index} 
+                   key={`${item.day}-${item.date}`} 
                    onPress={() => setSelectedDate(item.date)}
                    style={[
                      styles.dayCard, 
@@ -137,17 +172,17 @@ const DoctorCalendar: React.FC<DoctorCalendarProps> = ({ theme, onBack }) => {
          <View style={styles.summaryContainer}>
             <View style={[styles.summaryCard, { backgroundColor: theme.card }]}>
                <View style={styles.summaryItem}>
-                  <Text style={[styles.summaryVal, { color: theme.textPrimary }]}>24</Text>
+                  <Text style={[styles.summaryVal, { color: theme.textPrimary }]}>{allTimes.length}</Text>
                   <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Total Slots</Text>
                </View>
                <View style={[styles.summaryDivider, { backgroundColor: theme.border }]} />
                <View style={styles.summaryItem}>
-                  <Text style={[styles.summaryVal, { color: theme.textPrimary }]}>08</Text>
+                  <Text style={[styles.summaryVal, { color: theme.textPrimary }]}>{bookedCount.toString().padStart(2, '0')}</Text>
                   <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Booked</Text>
                </View>
                <View style={[styles.summaryDivider, { backgroundColor: theme.border }]} />
                <View style={styles.summaryItem}>
-                  <Text style={[styles.summaryVal, { color: theme.textPrimary }]}>16</Text>
+                  <Text style={[styles.summaryVal, { color: theme.textPrimary }]}>{availableCount.toString().padStart(2, '0')}</Text>
                   <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>Available</Text>
                </View>
             </View>
@@ -163,8 +198,8 @@ const DoctorCalendar: React.FC<DoctorCalendarProps> = ({ theme, onBack }) => {
          </View>
 
          <View style={styles.slotsContainer}>
-            {slots.map((slot, index) => (
-              <View key={index} style={styles.slotRow}>
+            {slots.map((slot) => (
+              <View key={slot.time} style={styles.slotRow}>
                  <Text style={[styles.slotTime, { color: theme.textSecondary }]}>{slot.time}</Text>
                  <View style={styles.slotMain}>
                     <TouchableOpacity 
